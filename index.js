@@ -1,43 +1,62 @@
+// index.js
 import express from "express";
-import bodyParser from "body-parser";
 import { Client, GatewayIntentBits } from "discord.js";
 
+// -------- CONFIG --------
+const TOKEN = "MTQyMDkzMDc1MTU4NjYzMTgwMA.GPd3jX.0XSpxDyTXFtWS70R9aZZP6JTpvbuT6CJswgF_0";       // <-- replace with your bot token
+const GUILD_ID = "1368736318737088675";     // <-- replace with your Discord server ID
+const ROLE_ID = "1420928690170368160";       // <-- replace with the role ID to assign
+const PORT = process.env.PORT || 3000;
+// ------------------------
+
 const app = express();
-app.use(bodyParser.json());
+app.use(express.json());
 
-// 🔑 Fill these in
-const TOKEN = "YOUR_DISCORD_BOT_TOKEN";
-const ROLE_ID = "ROLE_ID_TO_ASSIGN";
-const GUILD_ID = "YOUR_SERVER_ID";
-
+// Discord client setup
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
 });
 
-client.once("ready", () => {
+client.on("clientReady", () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
-});
-
-// Webhook endpoint (Google Sheets will call this)
-app.post("/discord-webhook", async (req, res) => {
-  const { discordId, score } = req.body;
-
-  try {
-    const guild = await client.guilds.fetch(GUILD_ID);
-    const member = await guild.members.fetch(discordId);
-
-    await member.roles.add(ROLE_ID);
-    console.log(`🎉 Assigned role to ${member.user.tag} (Score: ${score})`);
-    res.status(200).send("Role assigned");
-  } catch (error) {
-    console.error("❌ Error:", error);
-    res.status(500).send("Error assigning role");
-  }
 });
 
 client.login(TOKEN);
 
-// Replit listens on a random port, so use process.env.PORT
-app.listen(process.env.PORT || 3000, () =>
-  console.log("🌐 Webhook server running")
-);
+// Test route to confirm server is running
+app.get("/", (req, res) => {
+  res.send("✅ Server running! Send POST requests to /discord-webhook");
+});
+
+// Webhook route to assign roles
+app.post("/discord-webhook", async (req, res) => {
+  console.log("POST received:", req.body);
+
+  const { discordId, score } = req.body;
+
+  if (!discordId || !score) {
+    console.log("❌ Missing discordId or score");
+    return res.status(400).send("Missing discordId or score");
+  }
+
+  try {
+    const guild = await client.guilds.fetch(GUILD_ID);
+    const member = await guild.members.fetch(discordId);
+    const role = guild.roles.cache.get(ROLE_ID);
+
+    if (!member) return console.log("❌ Member not found:", discordId);
+    if (!role) return console.log("❌ Role not found:", ROLE_ID);
+
+    await member.roles.add(role);
+    console.log(`🎉 Assigned role to ${member.user.tag} (Score: ${score})`);
+  } catch (err) {
+    console.error("❌ Error assigning role:", err);
+  }
+
+  res.send("ok");
+});
+
+// Start Express server on Replit
+app.listen(PORT, () => {
+  console.log(`🌐 Server running on port ${PORT}`);
+});

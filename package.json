@@ -1,16 +1,11 @@
 {
-  "name": "workspace",
+  "name": "formrolebot",
   "version": "1.0.0",
   "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "type": "module",
   "dependencies": {
-    "discord.js": "^14.22.1",
-    "dotenv": "^17.2.2"
+    "discord.js": "^15.0.0",
+    "express": "^4.18.2",
+    "body-parser": "^1.20.2"
   }
 }
