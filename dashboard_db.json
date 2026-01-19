@@ -1,0 +1,35 @@
+{
+  "config": {
+    "serverName": "Tennessee State Roleplay",
+    "logoUrl": "",
+    "erlcKey": "VyWezuDQMDvdfsSUkvxR-ljbJmmrCkBUXvotcZZxBfxMqjTxqHSOUSLLChsHg",
+    "erlcUrl": "https://api.policeroleplay.community/v1",
+    "inviteCode": "welcome",
+    "masterKey": "admin123",
+    "port": 3000,
+    "homeTitle": "Tennessee State RP",
+    "homeDesc": "Welcome!",
+    "homeBg": "https://tr.rbxcdn.com/51357597920752538965842857418659/768/432/Image/Png",
+    "joinLink": "https://www.roblox.com/games/2534724415/Emergency-Response-Liberty-County",
+    "discordLink": "https://discord.gg/tsrp1"
+  },
+  "users": [
+    {
+      "username": "jacket3578",
+      "password": "02161989$Tt",
+      "role": "Owner",
+      "robloxId": "945846633"
+    },
+    {
+      "username": "testing",
+      "password": "testing",
+      "role": "Civilian"
+    }
+  ],
+  "gallery": [
+    "https://cdn.discordapp.com/attachments/1235053513059602462/1461020037845618850/image.png?ex=696e4e71&is=696cfcf1&hm=a7924993eb302c3955af3f5106f2232f950f33800ff262776ea727116cfe6d64&"
+  ],
+  "galleryRequests": [
+    "https://cdn.discordapp.com/attachments/1235053513059602462/1457698464887734352/image.png?ex=696ebf3c&is=696d6dbc&hm=6b40097bf63f5d4eaab017226fb2b52cee81a0eea7294960d209f6d1462cbb84&"
+  ]
+}

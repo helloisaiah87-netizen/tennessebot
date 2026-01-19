@@ -1,11 +1,13 @@
 {
-  "name": "formrolebot",
+  "name": "tennessee-bot",
   "version": "1.0.0",
+  "description": "ER:LC Command Dashboard",
   "main": "index.js",
-  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
   "dependencies": {
-    "discord.js": "^14.16.3",
-    "express": "^4.18.2",
-    "body-parser": "^1.20.2"
+    "axios": "^1.6.0",
+    "express": "^4.18.2"
   }
 }
