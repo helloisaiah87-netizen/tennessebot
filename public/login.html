@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff Portal | TSRP</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #FF3B30;
+            --bg: #050507;
+            --glass: rgba(255, 255, 255, 0.03);
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: white;
+            font-family: 'Inter', sans-serif;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-image: linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0.8)), url('https://images.unsplash.com/photo-1614064641938-3bbee52942c7?q=80&w=2070&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+        }
+
+        .login-card {
+            background: rgba(15, 15, 20, 0.8);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            padding: 40px;
+            border-radius: 24px;
+            border: 1px solid var(--border);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            animation: slideUp 0.6s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .logo-area { margin-bottom: 30px; }
+        .logo-area i {
+            font-size: 2.5rem;
+            color: var(--primary);
+            margin-bottom: 15px;
+            filter: drop-shadow(0 0 10px rgba(255, 59, 48, 0.4));
+        }
+
+        h2 { font-family: 'Oswald', sans-serif; font-size: 1.8rem; text-transform: uppercase; letter-spacing: 1px; margin: 0; }
+        p { color: #888; font-size: 0.9rem; margin-top: 8px; }
+
+        .input-group { margin-bottom: 20px; text-align: left; }
+        #code-group { display: none; }
+
+        label { display: block; font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #555; margin-bottom: 8px; margin-left: 5px; }
+        input {
+            width: 100%;
+            padding: 14px 18px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border);
+            color: white;
+            border-radius: 12px;
+            font-size: 1rem;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: rgba(255, 59, 48, 0.05);
+            box-shadow: 0 0 15px rgba(255, 59, 48, 0.1);
+        }
+
+        button {
+            width: 100%;
+            padding: 16px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 1rem;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: 0.3s;
+            margin-top: 10px;
+            font-family: 'Oswald', sans-serif;
+            letter-spacing: 1px;
+        }
+
+        button:hover {
+            background: #ff4d43;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(255, 59, 48, 0.3);
+        }
+
+        /* CUSTOM TOAST STYLES */
+        #notification-container { position: fixed; top: 20px; right: 20px; z-index: 10000; }
+        .toast { 
+            background: #1a1a1f; color: white; padding: 16px 24px; border-radius: 12px; 
+            margin-bottom: 10px; display: flex; align-items: center; gap: 12px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #333;
+            animation: slideIn 0.3s ease forwards; min-width: 280px;
+        }
+        .toast.success { border-left: 5px solid #2ecc71; }
+        .toast.error { border-left: 5px solid #FF3B30; }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(100px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes fadeOut { to { opacity: 0; transform: translateY(-20px); } }
+
+        .toggle-container { margin-top: 25px; padding-top: 20px; border-top: 1px solid var(--border); font-size: 0.9rem; color: #666; }
+        .toggle-link { color: var(--primary); text-decoration: none; font-weight: 600; margin-left: 5px; transition: 0.2s; }
+        .toggle-link:hover { color: white; }
+        .back-to-site { display: inline-block; margin-top: 20px; color: #444; text-decoration: none; font-size: 0.8rem; transition: 0.2s; }
+    </style>
+</head>
+<body>
+
+    <div id="notification-container"></div>
+
+    <div class="login-card">
+        <div class="logo-area">
+            <i class="fas fa-shield-alt" id="form-icon"></i>
+            <h2 id="form-title">Staff Login</h2>
+            <p id="form-sub">Enter your credentials to manage TSRP</p>
+        </div>
+
+        <form id="authForm">
+            <div class="input-group">
+                <label>Username</label>
+                <input type="text" id="username" placeholder="Enter username" required>
+            </div>
+            
+            <div class="input-group">
+                <label>Password</label>
+                <input type="password" id="password" placeholder="••••••••" required>
+            </div>
+
+            <div class="input-group" id="code-group">
+                <label>Registration Code</label>
+                <input type="text" id="reg-code" placeholder="Enter invite code">
+            </div>
+
+            <button type="submit" id="submit-btn">Authorize Access</button>
+        </form>
+
+        <div class="toggle-container">
+            <span id="toggle-text">First time here?</span> 
+            <a href="#" class="toggle-link" id="toggle-btn">Create Account</a>
+        </div>
+
+        <a href="/" class="back-to-site"><i class="fas fa-arrow-left"></i> Back to Public Site</a>
+    </div>
+
+    <script>
+        // --- TOAST FUNCTION ---
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('notification-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+            const color = type === 'success' ? '#2ecc71' : '#FF3B30';
+
+            toast.innerHTML = `<i class="fas ${icon}" style="color: ${color}"></i><span>${message}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.animation = 'fadeOut 0.5s ease forwards';
+                setTimeout(() => toast.remove(), 500);
+            }, 4000);
+        }
+
+        const authForm = document.getElementById('authForm');
+        const toggleBtn = document.getElementById('toggle-btn');
+        const formTitle = document.getElementById('form-title');
+        const formSub = document.getElementById('form-sub');
+        const formIcon = document.getElementById('form-icon');
+        const submitBtn = document.getElementById('submit-btn');
+        const codeGroup = document.getElementById('code-group');
+        const regCodeInput = document.getElementById('reg-code');
+
+        let isLoginMode = true;
+
+        toggleBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            isLoginMode = !isLoginMode;
+
+            formTitle.innerText = isLoginMode ? 'Staff Login' : 'New Account';
+            formSub.innerText = isLoginMode ? 'Enter your credentials to manage TSRP' : 'Your rank will be assigned based on your invite code.';
+            formIcon.className = isLoginMode ? 'fas fa-shield-alt' : 'fas fa-user-plus';
+            submitBtn.innerText = isLoginMode ? 'Authorize Access' : 'Create Staff Account';
+            document.getElementById('toggle-text').innerText = isLoginMode ? 'First time here?' : 'Have an account?';
+            toggleBtn.innerText = isLoginMode ? 'Create Account' : 'Login instead';
+
+            codeGroup.style.display = isLoginMode ? 'none' : 'block';
+            regCodeInput.required = !isLoginMode;
+        });
+
+        authForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const user = document.getElementById('username').value;
+            const pass = document.getElementById('password').value;
+            const code = regCodeInput.value;
+            const endpoint = isLoginMode ? '/api/login' : '/api/register';
+
+            submitBtn.innerText = "Verifying...";
+
+            const payload = { username: user, password: pass };
+            if(!isLoginMode) payload.code = code;
+
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    if (isLoginMode) {
+                        // --- CRITICAL: SAVE SESSION DATA ---
+                        sessionStorage.setItem('tsrp_user', user);
+                        sessionStorage.setItem('tsrp_pass', pass); // Be careful storing passwords in sessionStorage in production
+
+                        // Save the role exactly as the server sent it.
+                        // admin.js handles the case-insensitivity (lowercase) check.
+                        sessionStorage.setItem('tsrp_role', data.role); 
+
+                        showToast("Login successful!", "success");
+
+                        // Redirect to the admin dashboard
+                        setTimeout(() => {
+                            window.location.href = 'admin.html'; 
+                        }, 1000);
+                    } else {
+                        showToast("Account created! Logging you in...", "success");
+                        // Reload to switch back to login view or auto-login
+                        setTimeout(() => location.reload(), 1500);
+                    }
+                } else {
+                    showToast(data.message || "Invalid credentials.", "error");
+                    submitBtn.innerText = isLoginMode ? 'Authorize Access' : 'Create Staff Account';
+                }
+            } catch (err) {
+                console.error(err);
+                showToast("Connection failed. Is the server running?", "error");
+                submitBtn.innerText = isLoginMode ? 'Authorize Access' : 'Create Staff Account';
+            }
+        });
+    </script>
+</body>
+</html>

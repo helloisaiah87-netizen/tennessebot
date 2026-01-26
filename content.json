@@ -1,0 +1,117 @@
+{
+  "hero": {
+    "title": "Tennessee State Roleplay",
+    "subtitle": "Experience the highest quality roleplay in Liberty County.",
+    "btnText": "",
+    "btnUrl": "",
+    "statusText": "Server Online",
+    "statusColor": "#00ff44",
+    "images": [
+      "https://cdn.discordapp.com/attachments/1235053513059602462/1462281907986235423/Roblox_1_17_2026_7_03_43_PM.png?ex=69723ce6&is=6970eb66&hm=0ed67631138c4dc98916b1022fd92b9b66cc18799de3808b96070159a9c0ca5a&"
+    ],
+    "bgImage": "https://cdn.discordapp.com/attachments/1235053513059602462/1462281907986235423/Roblox_1_17_2026_7_03_43_PM.png?ex=69723ce6&is=6970eb66&hm=0ed67631138c4dc98916b1022fd92b9b66cc18799de3808b96070159a9c0ca5a&"
+  },
+  "features": [
+    {
+      "title": "Strict Roleplay",
+      "desc": "Our staff ensures professional and realistic scenes at all times."
+    },
+    {
+      "title": "Custom Liveries",
+      "desc": "Drive in style with our unique police and fire department skins."
+    },
+    {
+      "title": "Active Events",
+      "desc": "Join us every evening for server-wide roleplay scenarios."
+    }
+  ],
+  "activities": [
+    {
+      "title": "Strict Roleplay",
+      "desc": "Our staff ensures professional and realistic scenes at all times."
+    },
+    {
+      "title": "Custom Liveries",
+      "desc": "Drive in style with our unique police and fire department skins."
+    },
+    {
+      "title": "Active Events",
+      "desc": "Join us every evening for server-wide roleplay scenarios."
+    }
+  ],
+  "gallery": [
+    {
+      "url": "https://cdn.discordapp.com/attachments/1235053513059602462/1465351994083377384/erlzCGo.jpg?ex=6978cae4&is=69777964&hm=449633742b3ba20c8fbad22dda1d7c12ad36ce99ccc583983926016c25f27be2&",
+      "credit": "@snowbiox"
+    },
+    {
+      "url": "https://cdn.discordapp.com/attachments/1235053513059602462/1465282722728771595/Screenshot_2025-10-23_191606.jpg?ex=69788a60&is=697738e0&hm=7802a626c8c85309fe61efa454919aa39500a5925784b9e3c2a02cf59a14b2fc&",
+      "credit": "@deputynoah_is_in_love"
+    }
+  ],
+  "perks": {
+    "tn-plus": {
+      "title": "Tennessee +",
+      "price": "1,300 R$",
+      "link": "https://www.roblox.com/catalog/92035228012443/Tennessee",
+      "color": "#ae1a0a",
+      "perks": [
+        "Image / GIF Permissions",
+        "Access to the Founder’s Office",
+        "Tennessee+ Role",
+        "Special Ride-Alongs with Staff Members",
+        "Custom Role",
+        "Anti-Ping Bypass",
+        "Your Own Private Channel",
+        "Access to VIP Giveaways",
+        "Priority Ticket Support",
+        "Marketplace Discounts"
+      ]
+    },
+    "vip": {
+      "title": "V.I.P",
+      "price": "300 R$",
+      "link": "https://www.roblox.com/catalog/102772143176704/V-I-P",
+      "color": "#0fabbd",
+      "perks": [
+        "Image Perms",
+        "VIP Role",
+        "Exclusive Staff Ride-Alongs"
+      ]
+    },
+    "booster": {
+      "title": "Server Booster",
+      "price": "Nitro Boost",
+      "link": "https://discord.com/channels/1234120524561518694/1235054293963374704",
+      "color": "#bd05f0",
+      "perks": [
+        "Image/Link Perms in Discord",
+        "Exclusive Booster Role",
+        "Booster-only Giveaways",
+        "Special Chat Color"
+      ]
+    },
+    "ads": {
+      "title": "Sponsorship",
+      "price": "430 R$",
+      "link": "https://www.roblox.com/catalog/89871719786900/Sponsored-giveaway-includes-a-everyone-ping",
+      "color": "#cdc837",
+      "perks": [
+        "Includes an @everyone ping",
+        "Your business/server promoted",
+        "Check out the group for more options!"
+      ]
+    },
+    "donate": {
+      "title": "Donate",
+      "price": "100 - 1,000 R$",
+      "link": "https://www.roblox.com/communities/34345844/Official-Tennessee-state-roleplay-group-ERLC-ERLC#!/store",
+      "color": "#07c048",
+      "perks": [
+        "Support server development",
+        "Helping with hosting costs",
+        "Supporter Role in Discord"
+      ]
+    }
+  }
+}

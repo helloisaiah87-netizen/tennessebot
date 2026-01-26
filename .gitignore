@@ -1,0 +1,14 @@
+# Secrets
+.env
+
+# Dependencies
+node_modules/
+
+# Local Data (Prevents your users/bans from being public)
+users.json
+content.json
+bans.json
+
+# Logs and OS files
+npm-debug.log*
+.DS_Store

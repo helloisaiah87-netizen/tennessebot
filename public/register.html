@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Create Staff Account | TSRP</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="form-box">
+        <h2 style="text-align: center; color: white; margin-bottom: 20px;">New Admin Account</h2>
+        
+        <form action="/auth/register" method="POST">
+            <input type="text" name="username" placeholder="Roblox Username" required>
+            
+            <input type="password" name="password" placeholder="Create Password" required>
+            
+            <button type="submit">Create Account</button>
+        </form>
+
+        <p style="text-align: center; margin-top: 15px; font-size: 0.9rem; color: #888;">
+            Already staff? <a href="/login.html" style="color: #EE3124;">Login here</a>
+        </p>
+        <a href="/" style="display:block; text-align:center; color:#555; margin-top:10px; text-decoration:none;">Cancel</a>
+    </div>
+</body>
+</html>

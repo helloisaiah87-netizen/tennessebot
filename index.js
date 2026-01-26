@@ -1,1127 +1,407 @@
-/**
- * =============================================================================
- * TENNESSEE STATE RP - MANAGEMENT DASHBOARD (v5.1 Debug + Fix)
- * =============================================================================
- * FIXES:
- * - Escaped backticks in frontendHTML to prevent SyntaxError
- * - Added Console Logging for debugging
- * =============================================================================
- */
-
-const express = require("express");
-const axios = require("axios");
-const fs = require("fs");
-const path = require("path");
+const express = require('express');
 const app = express();
-
-console.log("[BOOT] Initializing Dashboard...");
+const path = require('path');
+const axios = require('axios');
+const fs = require('fs');
+const cors = require('cors');
 
 // ==========================================
-// 🛠️ CONFIGURATION & CONSTANTS
+// 1. CONFIGURATION & SETUP
 // ==========================================
+const PORT = process.env.PORT || 3000;
 
-const ROLE_HIERARCHY = {
-    Owner: 100,
-    "Co-Owner": 90,
-    "Head Developer": 85,
-    Developer: 80,
-    "Super Admin": 70,
-    Admin: 60,
-    Moderator: 50,
-    "Trial Moderator": 40,
-    Tester: 30,
-    Civilian: 0,
+// Configuration Keys
+const ERLC_API_KEY = process.env.ERLC_KEY; 
+const ERLC_API_BASE = "https://api.policeroleplay.community/v1/server";
+
+// Role Codes
+const SIGNUP_CODES = {
+    "TSRP_OWNER_ACCESS": "owner",
+    "TSRP_ADMIN_2024": "admin",
+    "TSRP_DEV_SECRET": "developer",
+    "TSRP_STAFF_JOIN": "mod",
+    "TSRP_CO_OWNER": "co-owner",
+    "TSRP_MANAGER": "manager"
 };
 
-const STAFF_GROUPS = {
-    "High Command": ["Owner", "Co-Owner", "Head Developer"],
-    "Administration": ["Super Admin", "Admin"],
-    "Moderation": ["Moderator", "Trial Moderator"],
-};
+// File Paths
+const PUBLIC_DIR = fs.existsSync(path.join(__dirname, 'public')) ? path.join(__dirname, 'public') : __dirname;
+const USERS_FILE = path.join(__dirname, 'users.json');
+const CONTENT_FILE = path.join(__dirname, 'content.json');
+const BANS_FILE = path.join(__dirname, 'bans.json');
 
-const DEFAULT_CONFIG = {
-    serverName: "Tennessee State RP",
-    logoUrl: "",
-    erlcKey: process.env.ERLC_KEY || "",
-    erlcUrl: "https://api.policeroleplay.community/v1",
-    inviteCode: "staff2026",
-    masterKey: "owner123",
-    port: 3000,
-    homeTitle: "Welcome to Tennessee State RP",
-    homeDesc:
-        "The official management dashboard. Join us on Discord or launch the game directly below.",
-    homeBg: "https://tr.rbxcdn.com/51357597920752538965842857418659/768/432/Image/Png",
-    joinLink:
-        "https://www.roblox.com/games/2534724415/Emergency-Response-Liberty-County",
-    discordLink: "https://discord.gg/",
-};
+// Queues
+let commandQueue = [];
+let messageQueue = [];
 
-// Database File Path
-const DB_FILE = path.join(__dirname, "dashboard_db.json");
-console.log(`[BOOT] Database Path: ${DB_FILE}`);
-
-// Global Database Cache
-let DB = loadDB();
-
-function loadDB() {
-    if (!fs.existsSync(DB_FILE)) {
-        console.log("[DB] File not found. Creating new default database.");
-        const initialData = {
-            config: DEFAULT_CONFIG,
-            users: [],
-            gallery: [],
-            galleryRequests: [],
-        };
-        try {
-            fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2));
-        } catch (e) {
-            console.error("[DB] Init Error:", e);
-        }
-        return initialData;
-    }
-    console.log("[DB] Loading existing database...");
-    try {
-        const data = JSON.parse(fs.readFileSync(DB_FILE));
-        data.config = { ...DEFAULT_CONFIG, ...data.config };
-        if (!Array.isArray(data.gallery)) data.gallery = [];
-        if (!Array.isArray(data.galleryRequests)) data.galleryRequests = [];
-        return data;
-    } catch (e) {
-        console.error("[DB] Corrupt JSON found. Resetting DB.");
-        return {
-            config: DEFAULT_CONFIG,
-            users: [],
-            gallery: [],
-            galleryRequests: [],
-        };
-    }
-}
-
-function saveDB(data) {
-    try {
-        fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
-        console.log("[DB] Database saved successfully.");
-    } catch (e) {
-        console.error("[DB] Save Error:", e);
-    }
-}
-
-app.use(express.json());
+// ==========================================
+// 2. MIDDLEWARE
+// ==========================================
+app.use(cors());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
+app.use(express.static(PUBLIC_DIR));
 
 // ==========================================
-// 🎨 FRONTEND (HTML/CSS/JS)
+// 3. FILE HELPER FUNCTIONS
 // ==========================================
-// NOTE: We use backslashes before backticks (\`) to prevent breaking the string
-const frontendHTML = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Management Dashboard</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        :root { 
-            --bg: #050505;
-            --sidebar: #0a0a0a; --card: #111111; 
-            --border: #222222; --hover: #1f1f1f;
-            --accent: #b91c1c; --accent-hover: #991b1b;
-            --text: #ffffff; --text-muted: #888888;
-            --success: #15803d; --discord: #5865F2;
+const getUsers = () => {
+    try {
+        if (!fs.existsSync(USERS_FILE)) {
+            const defaults = [{ user: "owner", pass: "123", role: "owner" }];
+            fs.writeFileSync(USERS_FILE, JSON.stringify(defaults, null, 2));
+            return defaults;
         }
-        * { box-sizing: border-box; outline: none; }
-        body { margin: 0; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text);
-            display: flex; height: 100vh; overflow: hidden; }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+    } catch (e) { return []; }
+};
 
-        /* LOADING */
-        #page-loader { position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center;
-            transition: opacity 0.5s ease; }
-        .spinner { width: 40px; height: 40px;
-            border: 4px solid #222; border-top: 4px solid var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+const getBansFromFile = () => {
+    try {
+        if (!fs.existsSync(BANS_FILE)) return [];
+        return JSON.parse(fs.readFileSync(BANS_FILE, 'utf8'));
+    } catch (e) { return []; }
+};
 
-        /* TOAST */
-        #toast-container { position: fixed;
-            bottom: 20px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 10px;
-        }
-        .toast { background: var(--card); border-left: 4px solid var(--text); color: white;
-            padding: 15px 20px; border-radius: 4px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); min-width: 250px; animation: slideIn 0.3s ease; display: flex; align-items: center;
-            justify-content: space-between; border: 1px solid var(--border); }
-        .toast.success { border-left-color: var(--success); }
-        .toast.error { border-left-color: var(--accent); }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+const saveBansToFile = (data) => {
+    try { fs.writeFileSync(BANS_FILE, JSON.stringify(data, null, 2)); } 
+    catch (e) { console.error("Error saving bans:", e); }
+};
 
-        /* AUTH */
-        #auth-overlay { position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 1000; display: flex; justify-content: center; align-items: center;
-        }
-        .auth-box { background: var(--card); padding: 40px; border-radius: 8px; border: 1px solid var(--border);
-            width: 400px; }
-        .input-group { margin-bottom: 16px; }
-        .input-group label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px;
-            font-weight: 500; }
-        input, select, textarea { width: 100%; padding: 12px; background: #0a0a0a;
-            border: 1px solid var(--border); border-radius: 4px; color: white; font-family: inherit; transition: 0.2s;
-        }
-        input:focus, select:focus { border-color: var(--accent); }
-        .btn { width: 100%; padding: 12px; background: var(--accent); color: white; border: none;
-            border-radius: 4px; cursor: pointer; font-weight: 700; margin-top: 10px; transition: 0.2s; display: inline-flex; justify-content: center; align-items: center; gap: 8px; text-decoration: none;
-            text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px; }
-        .btn:hover { background: var(--accent-hover); }
+const authenticate = (username, password) => {
+    const users = getUsers();
+    return users.find(u => u.user === username && u.pass === password);
+};
 
-        /* LAYOUT */
-        .sidebar { width: 280px;
-            background: var(--sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 24px; flex-shrink: 0;
-        }
-        .brand { font-size: 1.25rem; font-weight: 800; color: white; display: flex; align-items: center;
-            gap: 12px; margin-bottom: 30px; height: 50px; }
-        .brand img { max-height: 40px;
-            max-width: 100%; border-radius: 4px; }
-        .nav-item { padding: 12px 16px; border-radius: 4px;
-            cursor: pointer; color: var(--text-muted); display: flex; align-items: center; gap: 12px; margin-bottom: 4px; transition: 0.2s; font-weight: 500; font-size: 0.9rem;
-        }
-        .nav-item:hover { background: var(--hover); color: white; }
-        .nav-item.active { background: var(--accent); color: white; }
-        .user-panel { margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border); display: flex;
-            align-items: center; gap: 12px; }
+// ==========================================
+// 4. MAILBOX SYSTEM
+// ==========================================
+app.post('/pickup', (req, res) => {
+    const task = req.body;
+    if (!task) return res.status(400).json({error: "No data"});
+    commandQueue.push(task);
+    res.json({ status: "queued", message: "Command stored in mailbox" });
+});
 
-        .main-content { flex: 1; padding: 40px; overflow-y: auto;
-            background: var(--bg); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; animation: fadeIn 0.3s ease; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+app.get('/pickup', (req, res) => {
+    res.json({ messages: commandQueue });
+    commandQueue = []; 
+});
 
-        .card { background: var(--card);
-            border: 1px solid var(--border); border-radius: 4px; padding: 24px; margin-bottom: 20px;
-        }
+// ==========================================
+// 5. WEBSITE API ENDPOINTS
+// ==========================================
 
-        /* DATA TABLES */
-        table { width: 100%;
-            border-collapse: separate; border-spacing: 0; }
-        th { text-align: left; padding: 16px; color: var(--text-muted);
-            font-size: 0.75rem; text-transform: uppercase; font-weight: 700; border-bottom: 1px solid var(--border); letter-spacing: 0.05em;
-        }
-        td { padding: 16px; border-bottom: 1px solid var(--border); font-size: 0.9rem; vertical-align: middle; }
-        tr:hover td { background: var(--hover); }
-        .player-cell { display: flex; align-items: center; gap: 12px; }
-        .table-avatar { width: 40px; height: 40px; border-radius: 50%; background: #222; object-fit: cover;
-            border: 2px solid var(--border); }
-        .badge { padding: 4px 10px; border-radius: 4px;
-            font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
-        .badge.active { background: rgba(220, 38, 38, 0.2);
-            color: var(--accent); border: 1px solid var(--accent); }
-        .badge.expired { background: rgba(255, 255, 255, 0.1);
-            color: #888; border: 1px solid #444; }
+// --- CONTENT MANAGEMENT ---
+app.get('/api/content', (req, res) => {
+    if (!fs.existsSync(CONTENT_FILE)) {
+        return res.json({ 
+            hero: { title: "Welcome", subtitle: "Server Online", statusColor: "#00ff00" }, 
+            features: [], 
+            gallery: [] 
+        });
+    }
+    fs.readFile(CONTENT_FILE, 'utf8', (err, data) => {
+        if (err) return res.status(500).json({ error: "Failed to read file" });
+        try { res.json(JSON.parse(data)); } catch (e) { res.json({}); }
+    });
+});
 
-        /* STATUS BANNER */
-        .status-banner { background: linear-gradient(90deg, var(--card) 0%, #1a0505 100%);
-            border: 1px solid var(--border); border-left: 4px solid var(--success); border-radius: 4px; padding: 20px 30px; display: flex; align-items: center; justify-content: space-between;
-            margin-bottom: 30px; }
-        .status-dot { width: 10px; height: 10px; background: var(--success); border-radius: 50%;
-            box-shadow: 0 0 10px var(--success); display:inline-block; margin-right:8px; }
+app.post('/api/content', (req, res) => {
+    const newData = req.body;
+    if (!newData || typeof newData !== 'object') {
+        return res.status(400).json({ success: false, message: "Invalid data format" });
+    }
+    fs.writeFile(CONTENT_FILE, JSON.stringify(newData, null, 2), (err) => {
+        if (err) return res.status(500).json({ success: false });
+        res.json({ success: true, message: "Content saved" });
+    });
+});
 
-        /* HERO & GALLERY */
-        .hero { position: relative;
-            background-color: #000; background-size: cover; background-position: center; padding: 80px 40px; border-radius: 4px; margin-bottom: 30px; border: 1px solid var(--border); text-align: center;
-            overflow: hidden; }
-        .hero::before { content: ''; position: absolute; top:0; left:0; right:0; bottom:0;
-            background: linear-gradient(to bottom, rgba(0,0,0,0.6), rgba(0,0,0,0.95)); z-index: 1; }
-        .hero-content { position: relative; z-index: 2; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;
-            margin-bottom: 40px; }
-        .stat-card { background: var(--card); padding: 20px; border-radius: 4px;
-            border: 1px solid var(--border); border-left: 2px solid var(--accent); }
-        .stat-val { font-size: 1.8rem;
-            font-weight: 700; color: white; margin-bottom: 5px; }
-        .gallery-grid { display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-top: 20px; }
-        .gallery-item { aspect-ratio: 16/9;
-            border-radius: 4px; overflow: hidden; border: 1px solid var(--border); position: relative; background: #050505;
-        }
-        .gallery-item img { width: 100%; height: 100%; object-fit: cover; transition: 0.3s; }
-        .gallery-item:hover img { transform: scale(1.05); }
-        .gallery-del { position: absolute; top: 5px; right: 5px; background: var(--accent); color: white;
-            border: none; padding: 5px 10px; border-radius: 2px; cursor: pointer; display: none;
-        }
-        .gallery-item:hover .gallery-del { display: block; }
-        .btn-row { display: flex; gap: 15px; justify-content: center; margin-top: 25px; flex-wrap: wrap; }
-        .btn-join { background: white; color: black; padding: 12px 30px; border-radius: 4px;
-            text-decoration: none; font-weight: 800; display: inline-flex; align-items: center; gap: 8px; transition: transform 0.2s; text-transform: uppercase;
-        }
-        .btn-join:hover { transform: translateY(-2px); background: #eee; }
-        .btn-discord { background: var(--discord); color: white; padding: 12px 30px; border-radius: 4px;
-            text-decoration: none; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; transition: transform 0.2s; text-transform: uppercase;
-        }
-        .btn-discord:hover { background: #4752C4; transform: translateY(-2px); }
-        .section-split { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        @media(max-width: 900px) { .section-split { grid-template-columns: 1fr; } }
-        .request-box { background: var(--bg); border: 1px dashed var(--border); padding: 20px;
-            border-radius: 4px; text-align: center; margin-top: 20px; }
+// --- ADMIN ACTIONS ---
+app.post('/api/admin/action', (req, res) => {
+    const { action } = req.body;
+    messageQueue.push({ type: 'system', command: action, admin: req.headers.username || "WebConsole" });
+    res.json({ success: true });
+});
 
-        /* SEARCH & FILTER BAR */
-        .filter-bar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-        .filter-btn { background: var(--card);
-            border: 1px solid var(--border); color: var(--text-muted); padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: 0.2s;
-        }
-        .filter-btn:hover, .filter-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
-        .search-input { flex: 1; padding: 8px 12px; background: var(--card);
-            border: 1px solid var(--border); border-radius: 4px; color: white; min-width: 200px;
+app.post('/api/command-user', (req, res) => {
+    const { command, targetId } = req.body; 
+    messageQueue.push({ type: 'moderation', command: command, targetId: targetId, admin: req.headers.username || "WebConsole" });
+    res.json({ success: true });
+});
+
+// ==========================================
+// [FIXED] PUBLIC STATS ENDPOINT (Needed for Home Page)
+// ==========================================
+app.get('/api/erlc-stats', async (req, res) => {
+    try {
+        if (!ERLC_API_KEY) return res.status(500).json({ error: 'Server Key Missing' });
+
+        const response = await axios.get(`${ERLC_API_BASE}/players`, { 
+            headers: { "Server-Key": ERLC_API_KEY },
+            timeout: 5000 
+        });
+
+        // Ensure we send back an array
+        const players = Array.isArray(response.data) ? response.data : [];
+        res.json(players);
+
+    } catch (e) { 
+        console.error("Public Stats Error:", e.message);
+        res.status(500).json([]); 
+    }
+});
+
+// ==========================================
+// IMPROVED ERLC PROXY (Handles 502/Offline)
+// ==========================================
+
+// 1. Public Stats (For the Home Page)
+app.get('/api/erlc-stats', async (req, res) => {
+    try {
+        if (!ERLC_API_KEY) return res.json([]); // No key = 0 players
+
+        const response = await axios.get(`${ERLC_API_BASE}/players`, { 
+            headers: { "Server-Key": ERLC_API_KEY },
+            timeout: 5000 
+        });
+
+        res.json(response.data);
+
+    } catch (e) {
+        // If error is 502 or 503, the server is just offline/sleeping.
+        if (e.response && (e.response.status === 502 || e.response.status === 503)) {
+            // console.log("⚠️ ERLC Server is Offline (0 Players)"); // Optional: Uncomment to see in console
+            return res.json([]); // Return empty list so site shows 0 instead of crashing
         }
 
-        /* EMPTY STATES */
-        .empty-msg { text-align: center; color: var(--text-muted); padding: 40px; font-style: italic; }
-    </style>
-</head>
-<body>
+        console.error("❌ Stats Error:", e.message);
+        res.json([]); // Fail safe to 0 players
+    }
+});
 
-    <div id="page-loader"><div class="spinner"></div><div style="color:white; font-weight:600; letter-spacing:2px; font-size:0.9rem">LOADING DASHBOARD</div></div>
-    <div id="toast-container"></div>
+// 2. Admin Stats (For the Dashboard)
+app.get('/api/admin/stats', async (req, res) => {
+    const { username, password } = req.headers;
+    if (!authenticate(username, password)) return res.status(401).json({ success: false });
 
-    <div id="auth-overlay">
-        <div class="auth-box" id="login-form">
-            <h2 style="text-align:center; margin-bottom:20px; color:white; letter-spacing:1px">DASHBOARD LOGIN</h2>
-            <div class="input-group"><label>Username</label><input type="text" id="user-in" onkeydown="handleEnter(event, 'login')"></div>
-            <div class="input-group"><label>Password</label><input type="password" id="pass-in" onkeydown="handleEnter(event, 'login')"></div>
-            <button class="btn" onclick="auth('login')">Enter</button>
-            <div style="text-align:center; margin-top:15px; color:var(--text-muted); cursor:pointer; font-size:0.8rem" onclick="toggleAuth()">Create Account</div>
-        </div>
-        <div class="auth-box" id="reg-form" style="display:none">
-            <h2 style="text-align:center; margin-bottom:20px; color:white">REGISTER</h2>
-            <div class="input-group"><label>Username</label><input type="text" id="r-user" onkeydown="handleEnter(event, 'register')"></div>
-            <div class="input-group"><label>Password</label><input type="password" id="r-pass" onkeydown="handleEnter(event, 'register')"></div>
-            <div class="input-group"><label>Role</label>
-                <select id="r-role">
-                    <option value="Civilian">Civilian</option>
-                    <option value="Tester">Tester</option>
-                    <option value="Mod">Moderator</option>
-                    <option value="Admin">Admin</option>
-                    <option value="Developer">Developer</option>
-                    <option value="Co-Owner">Co-Owner</option>
-                    <option value="Owner">Owner</option>
-                </select>
-            </div>
-            <div class="input-group"><label>Staff Code</label><input type="password" id="r-code" onkeydown="handleEnter(event, 'register')"></div>
-            <button class="btn" onclick="auth('register')">Register</button>
-            <div style="text-align:center; margin-top:15px; color:var(--text-muted); cursor:pointer; font-size:0.8rem" onclick="toggleAuth()">Back</div>
-        </div>
-    </div>
+    const uptimeSec = process.uptime();
+    const h = Math.floor(uptimeSec / 3600);
+    const m = Math.floor((uptimeSec % 3600) / 60);
 
-    <div class="sidebar">
-        <div class="brand" id="brand-container"><i class="fas fa-gavel" style="color:var(--accent)"></i> <span id="brand-text">TN RP</span></div>
-        <div class="nav-item active" id="nav-home" onclick="switchTab('home')"><i class="fas fa-home"></i> Home</div>
-        <div class="nav-item" id="nav-bans" onclick="switchTab('bans')"><i class="fas fa-user-slash"></i> Ban Records</div>
-        <div class="nav-item" id="nav-staff" onclick="switchTab('staff')"><i class="fas fa-shield-alt"></i> Staff Roster</div>
-        <div class="nav-item" id="nav-accounts" style="display:none" onclick="switchTab('accounts')"><i class="fas fa-users-cog"></i> Account Manager</div>
-        <div class="nav-item" id="nav-settings" style="display:none" onclick="switchTab('settings')"><i class="fas fa-sliders-h"></i> Settings</div>
-        <div class="user-panel">
-            <div style="flex:1"><div id="u-name" style="font-weight:600">User</div><div id="u-role" style="font-size:0.75rem; color:var(--text-muted)">Role</div></div>
-            <i class="fas fa-sign-out-alt" style="cursor:pointer; color:var(--accent)" onclick="logout()"></i>
-        </div>
-    </div>
+    let gameData = { status: "Offline", players: [] };
 
-    <div class="main-content">
-        <div id="home" class="tab-content active">
-            <div class="status-banner">
-                <div><h2 style="margin:0; font-size:1.2rem"><span class="status-dot"></span> <span id="banner-sname">Loading...</span></h2><div style="color:var(--text-muted); font-size:0.85rem; margin-top:4px; margin-left:18px">SYSTEMS ONLINE</div></div>
-                <button class="btn" style="width:auto; margin:0; background:var(--card); border:1px solid var(--border)" onclick="switchTab('staff')">View Staff</button>
-            </div>
-            <div class="hero" id="hero-bg">
-                <div class="hero-content">
-                    <h1 id="hero-title" style="font-size: 3rem; margin-bottom: 10px; text-transform: uppercase; font-weight:800">Welcome</h1>
-                    <p id="hero-desc" style="color: #ccc; max-width: 600px; margin: 0 auto; line-height: 1.5; font-size: 1.1rem;">...</p>
-                    <div class="btn-row">
-                        <a id="btn-join" href="#" target="_blank" class="btn-join"><i class="fas fa-play"></i> Launch Game</a>
-                        <a id="btn-discord" href="#" target="_blank" class="btn-discord"><i class="fab fa-discord"></i> Discord</a>
-                    </div>
-                </div>
-            </div>
-            <div class="stats-grid">
-                <div class="stat-card"><div class="stat-val" id="stat-bans">-</div><div style="color:var(--text-muted); font-size:0.75rem; text-transform:uppercase">Total Bans</div></div>
-                <div class="stat-card"><div class="stat-val" id="stat-staff">-</div><div style="color:var(--text-muted); font-size:0.75rem; text-transform:uppercase">Staff Count</div></div>
-                <div class="stat-card"><div class="stat-val" style="color:var(--success)">Online</div><div style="color:var(--text-muted); font-size:0.75rem; text-transform:uppercase">API Status</div></div>
-            </div>
-            <div class="card">
-                <h3 style="margin-top:0; border-bottom:1px solid var(--border); padding-bottom:15px; color:white"><i class="fas fa-images"></i> SERVER GALLERY</h3>
-                <div id="home-gallery" class="gallery-grid"><p style="color:var(--text-muted)">No images added.</p></div>
-                <div class="request-box">
-                    <h4 style="margin-top:0">Have a cool screenshot?</h4>
-                    <div style="display:flex; gap:10px; max-width:500px; margin:10px auto;">
-                        <input id="req-img" placeholder="Paste Image URL here..." style="flex:1" onkeydown="handleEnter(event, 'request')">
-                        <button class="btn" style="width:auto; margin:0;" onclick="submitRequest()">Submit</button>
-                    </div>
-                    <small style="color:var(--text-muted)">Admins will review your photo before it appears.</small>
-                </div>
-            </div>
-        </div>
-
-        <div id="bans" class="tab-content">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px"><h1>BAN RECORDS</h1><button class="btn" style="width:auto" onclick="fetchBans()">Force Refresh</button></div>
-            <div class="card">
-                <input type="text" id="ban-search" style="width:100%; padding:12px; background:#050505; border:1px solid #333; color:white; border-radius:4px" placeholder="Search bans by Name or ID..." onkeyup="filterBans()">
-                <div style="overflow-x:auto"><table style="margin-top:20px"><thead><tr><th>Player</th><th>User ID</th><th>Status</th><th>Ban Date</th><th>Expires</th></tr></thead><tbody id="ban-list"><tr><td colspan="5" class="empty-msg">Loading bans...</td></tr></tbody></table></div>
-                <div class="pagination">
-                    <button class="btn" style="width:auto; background:var(--card)" id="pBtn" onclick="changePage(-1)">Prev</button>
-                    <span id="pageSpan" style="color:var(--text-muted); margin:0 15px">Page 1</span>
-                    <button class="btn" style="width:auto; background:var(--card)" id="nBtn" onclick="changePage(1)">Next</button>
-                </div>
-            </div>
-        </div>
-
-        <div id="staff" class="tab-content">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px"><h1>STAFF ROSTER</h1><button class="btn" style="width:auto" onclick="fetchStaff()">Force Refresh</button></div>
-            <div class="filter-bar">
-                <input type="text" class="search-input" id="staff-search" placeholder="Search Name or ID..." onkeyup="filterStaffRender()">
-                <button class="filter-btn active" onclick="setStaffFilter('All', this)">All</button>
-                <button class="filter-btn" onclick="setStaffFilter('High Command', this)">High Command</button>
-                <button class="filter-btn" onclick="setStaffFilter('Administration', this)">Administration</button>
-                <button class="filter-btn" onclick="setStaffFilter('Moderation', this)">Moderation</button>
-            </div>
-            <div id="staff-container"><div class="empty-msg">Loading staff roster...</div></div>
-        </div>
-
-        <div id="accounts" class="tab-content">
-            <h1>ACCOUNT MANAGER</h1>
-            <div class="card">
-                <div style="overflow-x:auto">
-                    <table>
-                        <thead><tr><th>Username</th><th>Role</th><th>Actions</th></tr></thead>
-                        <tbody id="account-list"></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <div id="settings" class="tab-content">
-            <h1>SETTINGS</h1>
-            <div class="section-split">
-                <div class="card">
-                    <h3 style="margin-top:0; color:white">Config</h3>
-                    <div class="input-group"><label>Server Name</label><input id="c-sname"></div>
-                    <div class="input-group"><label>Logo URL</label><input id="c-logo"></div>
-                    <div class="input-group"><label>ERLC API Key</label><input type="password" id="c-key" placeholder="Enter key here to fix stats"></div>
-                    <div class="input-group"><label>Staff Code</label><input id="c-code"></div>
-                    <div class="input-group"><label>Discord Link</label><input id="c-dlink"></div>
-                </div>
-                <div class="card">
-                    <h3 style="margin-top:0; color:white">Visuals</h3>
-                    <div class="input-group"><label>Title</label><input id="c-htitle"></div>
-                    <div class="input-group"><label>Description</label><textarea id="c-hdesc" rows="3"></textarea></div>
-                    <div class="input-group"><label>Background Image</label><input id="c-hbg"></div>
-                    <div class="input-group"><label>Game Link</label><input id="c-jlink"></div>
-                </div>
-            </div>
-            <div class="card"><h3 style="margin-top:0; color:white">Pending Gallery Requests</h3><div id="request-list" class="gallery-grid"><p style="color:var(--text-muted)">No pending requests.</p></div></div>
-            <div class="card">
-                <h3 style="margin-top:0; color:white">Active Gallery Images</h3>
-                <div style="display:flex; gap:10px; margin-bottom:15px"><input id="new-img" placeholder="Paste Image URL here..." style="flex:1" onkeydown="handleEnter(event, 'gallery')"><button class="btn" style="width:auto; margin-top:0" onclick="addGalleryImage()">Add Direct</button></div>
-                <div id="settings-gallery" class="gallery-grid"></div>
-            </div>
-            <button class="btn" onclick="saveConfig()" style="width:200px; margin-bottom:40px">Save Changes</button>
-        </div>
-    </div>
-
-    <script>
-        const ROLE_HIERARCHY = { "Owner": 5, "Co-Owner": 5, "Developer": 4, "Admin": 3, "Mod": 2, "Tester": 1, "Civilian": 0 };
-        // FIXED: Pagination Variables
-        let bans = [], page = 1, totalBans = 0, searchTimeout = null;
-        let gallery = [], requests = [], allStaff = [], currentStaffFilter = 'All';
-
-        function notify(msg, type = 'success') {
-            const c = document.getElementById('toast-container');
-            const d = document.createElement('div');
-            d.className = 'toast ' + type;
-            d.innerHTML = (type==='error'?'<i class="fas fa-exclamation-circle"></i> ':'<i class="fas fa-check-circle"></i> ') + msg;
-            c.appendChild(d);
-            setTimeout(() => { d.style.opacity = '0'; setTimeout(()=>d.remove(),300); }, 4000);
-        }
-
-        function handleEnter(e, type) {
-            if(e.key === 'Enter') {
-                if(type === 'login') auth('login');
-                if(type === 'register') auth('register');
-                if(type === 'gallery') addGalleryImage();
-                if(type === 'request') submitRequest();
-            }
-        }
-
-        window.onload = async () => {
-            const loader = document.getElementById('page-loader');
-            try {
-                // Check session only
-                const sess = localStorage.getItem('tn_user');
-                if(sess) {
-                    const user = JSON.parse(sess);
-                    document.getElementById('u-name').innerText = user.username;
-                    document.getElementById('u-role').innerText = user.role;
-                    updateNav(user.role);
-                    document.getElementById('auth-overlay').style.display = 'none';
-                    await loadAllConfig();
-                    fetchStats();
-                }
-            } catch(e) { console.error("Load error:", e); }
-
-            loader.style.opacity = '0';
-            setTimeout(() => loader.remove(), 300);
-        };
-
-        function updateNav(role) {
-            const level = ROLE_HIERARCHY[role] || 0;
-            document.getElementById('nav-home').style.display = 'flex';
-            document.getElementById('nav-bans').style.display = level >= 1 ? 'flex' : 'none';
-            document.getElementById('nav-staff').style.display = level >= 1 ? 'flex' : 'none';
-            document.getElementById('nav-settings').style.display = level >= 5 ? 'flex' : 'none';
-        }
-
-        function toggleAuth() {
-            const l = document.getElementById('login-form'), r = document.getElementById('reg-form');
-            if(l.style.display==='none'){ l.style.display='block'; r.style.display='none'; } else { l.style.display='none'; r.style.display='block'; }
-        }
-
-        async function auth(t) {
-            const d = t==='login' ? {u:document.getElementById('user-in').value,p:document.getElementById('pass-in').value} : {u:document.getElementById('r-user').value,p:document.getElementById('r-pass').value,r:document.getElementById('r-role').value,c:document.getElementById('r-code').value};
-            try { 
-                const r=await fetch('/api/auth/'+t,{method:'POST',body:JSON.stringify(d),headers:{'Content-Type':'application/json'}});
-                const j=await r.json();
-                if(j.ok){ localStorage.setItem('tn_user',JSON.stringify(j.user)); location.reload(); } else notify(j.msg, 'error');
-            } catch(e){ notify('Connection Error', 'error'); }
-        }
-
-        function logout() { localStorage.removeItem('tn_user'); location.reload(); }
-
-        function switchTab(id) {
-            document.querySelectorAll('.tab-content').forEach(e=>e.classList.remove('active'));
-            document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));
-            document.getElementById(id).classList.add('active');
-            document.getElementById('nav-'+id).classList.add('active');
-
-            if(id === 'bans') fetchBans();
-            if(id === 'staff') fetchStaff();
-            if(id === 'settings') loadRequests();
-            if(id === 'home') fetchStats();
-        }
-
-        async function loadAllConfig() {
-            try {
-                const res = await fetch('/api/config');
-                const d = await res.json();
-                const brand = document.getElementById('brand-container');
-                if(d.logoUrl && d.logoUrl.trim() !== "") brand.innerHTML = '<img src="'+d.logoUrl+'" alt="Logo">';
-                else document.getElementById('brand-text').innerText = d.serverName;
-                document.getElementById('banner-sname').innerText = d.serverName;
-                document.getElementById('hero-title').innerText = d.homeTitle;
-                document.getElementById('hero-desc').innerText = d.homeDesc;
-                if(d.homeBg) document.getElementById('hero-bg').style.backgroundImage = 'linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.9)), url('+d.homeBg+')';
-                document.getElementById('btn-join').href = d.joinLink;
-                document.getElementById('btn-discord').href = d.discordLink;
-                document.getElementById('c-sname').value = d.serverName;
-                document.getElementById('c-logo').value = d.logoUrl || "";
-                document.getElementById('c-code').value = d.inviteCode;
-                document.getElementById('c-dlink').value = d.discordLink;
-                document.getElementById('c-htitle').value = d.homeTitle;
-                document.getElementById('c-hdesc').value = d.homeDesc;
-                document.getElementById('c-hbg').value = d.homeBg;
-                document.getElementById('c-jlink').value = d.joinLink;
-                gallery = d.gallery || [];
-                renderGallery();
-            } catch(e) {}
-        }
-
-        function renderGallery() {
-            const html = gallery.map(url => '<div class="gallery-item"><img src="'+url+'"></div>').join('');
-            document.getElementById('home-gallery').innerHTML = html || '<p style="color:var(--text-muted)">No images added.</p>';
-            const editHtml = gallery.map((url, i) => '<div class="gallery-item"><img src="'+url+'"><button class="gallery-del" onclick="delImg('+i+')"><i class="fas fa-trash"></i></button></div>').join('');
-            document.getElementById('settings-gallery').innerHTML = editHtml;
-        }
-
-        async function submitRequest() {
-            const url = document.getElementById('req-img').value;
-            if(!url) return;
-            await fetch('/api/gallery/request', { method: 'POST', body: JSON.stringify({ url }), headers: {'Content-Type': 'application/json'} });
-            notify("Request Submitted for Review!", "success");
-            document.getElementById('req-img').value = '';
-        }
-
-        async function loadRequests() {
-            try {
-                const res = await fetch('/api/gallery/requests');
-                requests = await res.json();
-                // FIX: Backticks escaped below
-                const html = requests.map((url, i) => \`
-                    <div class="gallery-item">
-                        <img src="\${url}">
-                        <div style="position:absolute; bottom:0; width:100%; display:flex;">
-                            <button onclick="manageReq('\${url}', true)" style="flex:1; background:var(--success); border:none; color:white; padding:5px; cursor:pointer"><i class="fas fa-check"></i></button>
-                            <button onclick="manageReq('\${url}', false)" style="flex:1; background:var(--accent); border:none; color:white; padding:5px; cursor:pointer"><i class="fas fa-times"></i></button>
-                        </div>
-                    </div>
-                \`).join('');
-                document.getElementById('request-list').innerHTML = html || '<p style="color:var(--text-muted)">No pending requests.</p>';
-            } catch(e) {}
-        }
-
-        async function manageReq(url, approve) {
-            await fetch('/api/gallery/manage', { method: 'POST', body: JSON.stringify({ url, approve }), headers: {'Content-Type': 'application/json'} });
-            loadRequests();
-            loadAllConfig(); 
-            notify(approve ? "Image Approved" : "Image Rejected", approve ? "success" : "error");
-        }
-
-        function addGalleryImage() {
-            const url = document.getElementById('new-img').value;
-            if(url) { gallery.push(url); document.getElementById('new-img').value=''; renderGallery(); notify("Image Added! Please Save.", "success"); }
-        }
-        function delImg(i) { gallery.splice(i, 1); renderGallery(); }
-
-        async function saveConfig() {
-            const data = { 
-                serverName: document.getElementById('c-sname').value, 
-                logoUrl: document.getElementById('c-logo').value, 
-                erlcKey: document.getElementById('c-key').value, 
-                inviteCode: document.getElementById('c-code').value,
-                discordLink: document.getElementById('c-dlink').value,
-                homeTitle: document.getElementById('c-htitle').value,
-                homeDesc: document.getElementById('c-hdesc').value,
-                homeBg: document.getElementById('c-hbg').value,
-                joinLink: document.getElementById('c-jlink').value,
-                gallery: gallery
-            };
-            await fetch('/api/config', { method: 'POST', body: JSON.stringify(data), headers: {'Content-Type': 'application/json'} });
-            notify("Saved Successfully!");
-            setTimeout(() => location.reload(), 1000);
-        }
-
-        async function fetchStats() {
-            try {
-                const res = await fetch('/api/stats');
-                const data = await res.json();
-                document.getElementById('stat-bans').innerText = data.banCount;
-                document.getElementById('stat-staff').innerText = data.staffCount;
-            } catch(e) {}
-        }
-
-        // ==========================================
-        // 🚀 FIXED: SERVER-SIDE PAGINATION CLIENT LOGIC
-        // ==========================================
-        async function fetchBans() {
-            const btn = document.querySelector('#bans button');
-            const list = document.getElementById('ban-list');
-            const searchVal = document.getElementById('ban-search').value;
-
-            if(btn) btn.innerText = "Refreshing...";
-            // Show loading specifically for current page
-            list.innerHTML = '<tr><td colspan="5" class="empty-msg"><div class="spinner" style="width:30px; height:30px; margin:0 auto 10px auto"></div>Loading Page ' + page + '...</td></tr>';
-
-            try {
-                // Fetch only 20 items from server
-                const res = await fetch(\`/api/bans?page=\${page}&search=\${encodeURIComponent(searchVal)}\`);
-                const data = await res.json();
-
-                bans = data.bans; // Server returns sliced array
-                totalBans = data.total; // Server returns total count
-
-                // Update Total Stats if this is the first load
-                if(page === 1) document.getElementById('stat-bans').innerText = totalBans;
-
-                renderBans();
-
-                if(btn) btn.innerHTML = '<i class="fas fa-sync"></i> Force Refresh';
-            } catch(e){ 
-                notify("Failed to fetch Bans.", "error");
-                list.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:30px; color:var(--accent)">Unable to load data. API Error.</td></tr>';
-                if(btn) btn.innerHTML = '<i class="fas fa-sync"></i> Retry';
-            }
-        }
-
-        function filterBans() {
-            // Debounce to prevent API spam
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
-                page = 1; // Reset to page 1 on search
-                fetchBans();
-            }, 500);
-        }
-
-        function renderBans() {
-            if(!bans || bans.length === 0) {
-                 document.getElementById('ban-list').innerHTML = '<tr><td colspan="5" style="text-align:center; padding:30px">No bans found.</td></tr>';
-                 document.getElementById('pBtn').disabled = true;
-                 document.getElementById('nBtn').disabled = true;
-                 return;
-            }
-
-            let h = '';
-            // Render the specific slice returned by server
-            bans.forEach(b => {
-                const img = b.avatar || 'https://tr.rbxcdn.com/53eb9b17fe1432a801963283bc9a7218/150/150/AvatarHeadshot/Png';
-                let dateStr = "Unknown";
-                if(b.createdAt) {
-                    const date = new Date(typeof b.createdAt === 'string' ? b.createdAt : b.createdAt * 1000);
-                    if(!isNaN(date.getTime())) dateStr = date.toLocaleDateString();
-                }
-
-                h += '<tr><td><div class="player-cell"><img src="'+img+'" class="table-avatar"><div><div style="font-weight:600">'+b.player+'</div></div></div></td>';
-                h += '<td><code style="color:var(--text-muted)">'+(b.playerId||'Unknown')+'</code></td>';
-                h += '<td>'+(b.active 
-                    ? '<span class="badge active">Active</span>' : '<span class="badge expired">Expired</span>')+'</td>';
-                h += '<td>'+dateStr+'</td>';
-                h += '<td>'+(b.expires || 'Never')+'</td></tr>';
+    if (ERLC_API_KEY) {
+        try {
+            const playersRes = await axios.get(`${ERLC_API_BASE}/players`, { 
+                headers: { "Server-Key": ERLC_API_KEY },
+                timeout: 3000
             });
 
-            document.getElementById('ban-list').innerHTML = h;
-
-            // Pagination controls based on Total Count
-            const totalPages = Math.ceil(totalBans / 20);
-            document.getElementById('pageSpan').innerText = "Page " + page + " of " + (totalPages || 1);
-            document.getElementById('pBtn').disabled = page <= 1;
-            document.getElementById('nBtn').disabled = page >= totalPages;
-        }
-
-        function changePage(d) { 
-            const next = page + d;
-            const totalPages = Math.ceil(totalBans / 20);
-            if(next > 0 && next <= totalPages) {
-                page = next;
-                fetchBans();
+            // If we get data, the server is Online
+            if (playersRes.data) {
+                gameData.status = "Online";
+                gameData.players = playersRes.data;
             }
-        }
-
-        async function fetchStaff() {
-            const btn = document.querySelector('#staff button');
-            const cont = document.getElementById('staff-container');
-
-            if(btn) btn.innerText = "Refreshing...";
-            cont.innerHTML = '<div class="empty-msg"><div class="spinner" style="width:30px; height:30px; margin:0 auto 10px auto"></div>Refreshing Staff from ERLC...</div>';
-            try {
-                const res = await fetch('/api/staff');
-                allStaff = await res.json();
-                filterStaffRender();
-                let count = 0;
-                for(let rank in allStaff) count += allStaff[rank].length;
-                document.getElementById('stat-staff').innerText = count;
-                if(btn) btn.innerHTML = '<i class="fas fa-sync"></i> Force Refresh';
-            } catch(e) {
-                cont.innerHTML = '<div class="card" style="text-align:center; color:var(--text-muted)">Unable to load Staff Roster. Check API Key.</div>';
-                if(btn) btn.innerHTML = '<i class="fas fa-sync"></i> Retry';
+        } catch (err) {
+            // 502/503 means Offline. Anything else is an error.
+            if (err.response && (err.response.status === 502 || err.response.status === 503)) {
+                gameData.status = "Offline"; 
+            } else {
+                console.error("Admin Stats Fetch Error:", err.message);
+                gameData.status = "Error";
             }
-        }
-
-        function setStaffFilter(filterName, btn) {
-            currentStaffFilter = filterName;
-            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-            if(btn) btn.classList.add('active');
-            filterStaffRender();
-        }
-
-        function filterStaffRender() {
-            const q = document.getElementById('staff-search').value.toLowerCase();
-            const container = document.getElementById('staff-container');
-            let html = '';
-
-            const highCommand = ["owner", "co-owner", "co owner", "coowner", "head developer", "developer"];
-            const admin = ["super admin", "admin"];
-            const mod = ["moderator", "trial moderator", "tester"];
-            for(const [rank, members] of Object.entries(allStaff)) {
-                const rankLower = rank.toLowerCase();
-                let matchesTab = false;
-                if(currentStaffFilter === 'All') matchesTab = true;
-                else if(currentStaffFilter === 'High Command' && highCommand.some(r => rankLower.includes(r))) matchesTab = true;
-                else if(currentStaffFilter === 'Administration' && admin.some(r => rankLower.includes(r))) matchesTab = true;
-                else if(currentStaffFilter === 'Moderation' && mod.some(r => rankLower.includes(r))) matchesTab = true;
-
-                if(!matchesTab) continue;
-                const matchingMembers = members.filter(m => m.user.toLowerCase().includes(q) || m.id.toString().includes(q));
-
-                if(matchingMembers.length > 0) {
-                    html += '<div style="margin-bottom:30px"><div style="font-weight:700; color:white; margin-bottom:12px; border-left:4px solid var(--accent); padding-left:10px; text-transform:uppercase; letter-spacing:1px">'+rank+' <span style="color:var(--text-muted); font-weight:400">('+matchingMembers.length+')</span></div><div class="card" style="padding:0"><table>';
-                    matchingMembers.forEach(m => {
-                        const img = m.avatar || 'https://tr.rbxcdn.com/53eb9b17fe1432a801963283bc9a7218/150/150/AvatarHeadshot/Png';
-                        html += '<tr><td style="display:flex; align-items:center; gap:12px"><img src="'+img+'" class="table-avatar"><span style="font-weight:600">'+m.user+'</span><span style="margin-left:auto; color:var(--text-muted); font-family:monospace; background:rgba(255,255,255,0.05); padding:2px 8px; border-radius:4px">'+m.id+'</span></td></tr>';
-                    });
-                    html += '</table></div></div>';
-                }
-            }
-            container.innerHTML = html || '<div style="padding:20px; text-align:center; color:var(--text-muted)">No staff found matching criteria.</div>';
-        }
-    </script>
-</body>
-</html>
-`;
-
-console.log("[BOOT] Frontend template loaded successfully.");
-
-// ==========================================
-// ⚙️ BACKEND API & LOGIC
-// ==========================================
-
-async function enrichWithRobloxData(items, idKey) {
-    if (!items || items.length === 0) return items;
-    // 1. EXTRACT VALID IDS AGGRESSIVELY
-    const ids = [
-        ...new Set(
-            items
-                .map((i) => {
-                    let val = i[idKey];
-                    // Handle all possible casing for keys
-                    if (!val)
-                        val =
-                            i.UserId ||
-                            i.userId ||
-                            i.userid ||
-                            i.PlayerId ||
-                            i.playerId;
-                    const parsed = parseInt(val);
-                    return parsed && parsed > 0 ? parsed : null;
-                })
-                .filter((x) => x !== null),
-        ),
-    ];
-    if (ids.length === 0) return items;
-
-    const map = {};
-    ids.forEach((id) => (map[id] = { avatar: null, name: null }));
-    // 2. BATCH FETCH FROM ROBLOX
-    const chunkSize = 10;
-    for (let i = 0; i < ids.length; i += chunkSize) {
-        const chunk = ids.slice(i, i + chunkSize);
-        try {
-            const [avatarRes, userRes] = await Promise.allSettled([
-                axios.get(
-                    `https://thumbnails.roblox.com/v1/users/avatar?userIds=${chunk.join(",")}&size=150x150&format=Png&isCircular=false`,
-                    { timeout: 4000 },
-                ),
-                axios.post(
-                    `https://users.roblox.com/v1/users`,
-                    { userIds: chunk, excludeBannedUsers: false },
-                    { timeout: 4000 },
-                ),
-            ]);
-            if (avatarRes.status === "fulfilled" && avatarRes.value.data.data) {
-                avatarRes.value.data.data.forEach((obj) => {
-                    if (map[obj.targetId])
-                        map[obj.targetId].avatar = obj.imageUrl;
-                });
-            }
-            if (userRes.status === "fulfilled" && userRes.value.data.data) {
-                userRes.value.data.data.forEach((obj) => {
-                    if (map[obj.id]) map[obj.id].name = obj.name;
-                });
-            }
-        } catch (e) {
-            console.error("Roblox API Warn:", e.message);
         }
     }
 
-    // 3. MAP & FALLBACK TO DIRECT URL
-    return items.map((item) => {
-        let idVal = item[idKey];
-        if (!idVal)
-            idVal =
-                item.UserId ||
-                item.userId ||
-                item.userid ||
-                item.PlayerId ||
-                item.playerId;
-        const id = parseInt(idVal);
+    res.json({
+        system: { uptime: `${h}h ${m}m`, memory: Math.round(process.memoryUsage().rss / 1024 / 1024) + " MB" },
+        game: gameData,
+        totalBans: getBansFromFile().length
+    });
+});
 
-        if (id && map[id]) {
-            // FALLBACK AVATAR: If batch failed, use direct image link
-            let finalAvatar = map[id].avatar;
-            if (!finalAvatar) {
-                finalAvatar = `https://www.roblox.com/headshot-thumbnail/image?userId=${id}&width=420&height=420&format=png`;
+// --- BANS & AVATARS ---
+app.get('/api/bans', async (req, res) => {
+    try {
+        if (!ERLC_API_KEY) throw new Error("No Key");
+
+        // 1. Get the list of currently banned users from ERLC
+        const response = await axios.get(`${ERLC_API_BASE}/bans`, { 
+            headers: { "Server-Key": ERLC_API_KEY } 
+        });
+
+        let apiData = response.data;
+        let liveBanList = [];
+
+        // 2. Format ERLC data (it sometimes sends an Array, sometimes an Object)
+        if (Array.isArray(apiData)) {
+            liveBanList = apiData;
+        } else if (typeof apiData === 'object') {
+            liveBanList = Object.entries(apiData).map(([id, name]) => ({ 
+                UserId: id, 
+                User: name 
+            }));
+        }
+
+        // 3. Get your local logs (This file has the Dates, Reasons, and Mods)
+        const localLogs = getBansFromFile(); 
+
+        // 4. Create a quick lookup map using UserId
+        const localDetails = {};
+        localLogs.forEach(log => {
+            if (log.UserId) {
+                localDetails[log.UserId] = {
+                    Reason: log.Reason,
+                    Moderator: log.Moderator,
+                    Date: log.Date,
+                    Avatar: log.Avatar
+                };
             }
+        });
+
+        // 5. Merge the data
+        // We take the "Live" list (so we know who is actually banned)
+        // and fill in the blanks using your local file.
+        const finalBanList = liveBanList.map(ban => {
+            const details = localDetails[ban.UserId];
 
             return {
-                ...item,
-                avatar: finalAvatar,
-                user:
-                    map[id].name ||
-                    item.user ||
-                    item.player ||
-                    item.Username ||
-                    "Unknown",
-                player:
-                    map[id].name ||
-                    item.player ||
-                    item.user ||
-                    item.Username ||
-                    "Unknown",
+                UserId: ban.UserId,
+                User: ban.User, // Always use the username from the API (most current)
+
+                // If found in local file, use that info. If not, use defaults.
+                Reason: details ? details.Reason : "Banned In-Game / Reason Unknown",
+                Moderator: details ? details.Moderator : "Unknown",
+                Date: details ? details.Date : "Unknown",
+                Avatar: details ? details.Avatar : null
             };
-        }
-        return item;
+        });
+
+        res.json({ bans: finalBanList });
+
+    } catch (e) {
+        console.error("Error fetching bans:", e.message);
+        // Fallback: If API fails, just show local file
+        res.json({ bans: getBansFromFile() });
+    }
+});
+
+app.post('/api/fetch-avatars', async (req, res) => {
+    const { userIds } = req.body;
+    if (!userIds || !Array.isArray(userIds)) return res.json({});
+
+    const currentBans = getBansFromFile();
+    let imageCache = {};
+
+    currentBans.forEach(b => {
+        if (b.UserId && b.Avatar) imageCache[b.UserId] = b.Avatar;
     });
-}
 
-console.log("[BOOT] Registering API Routes...");
+    const DEFAULT_GREY_IMG = "https://tr.rbxcdn.com/53eb9b17fe1432a809c73a13889b5006/150/150/Image/Png";
+    let missingIds = userIds.filter(id => {
+        const saved = imageCache[id];
+        return !saved || saved === DEFAULT_GREY_IMG || saved.includes("150/150");
+    });
 
-app.post("/api/auth/register", (req, res) => {
-    const { u, p, r, c } = req.body;
-    console.log(`[AUTH] Register attempt: ${u} (Role: ${r})`);
-    if (DB.users.find((x) => x.username === u))
-        return res.json({ ok: false, msg: "User exists" });
-    let assignedRole = "Civilian";
-    if (ROLE_HIERARCHY[r] > 0) {
-        if (c !== DB.config.inviteCode && p !== DB.config.masterKey)
-            return res.json({ ok: false, msg: "Invalid Code" });
-        assignedRole = r;
-    }
-    DB.users.push({ username: u, password: p, role: assignedRole });
-    saveDB(DB);
-    res.json({ ok: true, user: { username: u, role: assignedRole } });
-});
+    if (missingIds.length > 0) {
+        try {
+            const chunks = [];
+            for (let i = 0; i < missingIds.length; i += 100) chunks.push(missingIds.slice(i, i + 100));
 
-app.post("/api/auth/login", (req, res) => {
-    const { u, p } = req.body;
-    console.log(`[AUTH] Login attempt: ${u}`);
-    const user = DB.users.find((x) => x.username === u && x.password === p);
-    if (user || p === DB.config.masterKey)
-        return res.json({
-            ok: true,
-            user: user || { username: "Master", role: "Owner" },
-        });
-    res.json({ ok: false, msg: "Invalid credentials" });
-});
-
-app.get("/api/stats", async (req, res) => {
-    try {
-        const [banRes, staffRes] = await Promise.allSettled([
-            axios.get(`https://api.eryn.io/v1/bans`, { timeout: 4000 }),
-            DB.config.erlcKey
-                ? axios.get(`${DB.config.erlcUrl}/server/staff`, {
-                      headers: { "Server-Key": DB.config.erlcKey },
-                      timeout: 4000,
-                  })
-                : Promise.resolve({ data: {} }),
-        ]);
-
-        let banCount = 0;
-        if (banRes.status === "fulfilled" && Array.isArray(banRes.value.data)) {
-            banCount = banRes.value.data.length;
-        }
-
-        let staffCount = 0;
-        if (staffRes.status === "fulfilled" && staffRes.value.data) {
-            const s = staffRes.value.data;
-            for (const k in s) {
-                if (Array.isArray(s[k])) staffCount += s[k].length;
-                else if (typeof s[k] === "object")
-                    staffCount += Object.keys(s[k]).length;
-            }
-        }
-        res.json({ banCount, staffCount });
-    } catch (e) {
-        res.json({ banCount: 0, staffCount: 0 });
-    }
-});
-
-app.get("/api/staff", async (req, res) => {
-    try {
-        if (!DB.config.erlcKey) return res.json({});
-        const r = await axios.get(`${DB.config.erlcUrl}/server/staff`, {
-            headers: { "Server-Key": DB.config.erlcKey },
-            timeout: 5000,
-        });
-
-        let flatList = [];
-        let rawStructure = r.data || {};
-
-        for (const [rank, users] of Object.entries(rawStructure)) {
-            if (Array.isArray(users)) {
-                users.forEach((u) => {
-                    const uid = parseInt(
-                        u.id || u.Id || u.userId || u.UserId || u.PlayerId || 0,
-                    );
-                    const uname =
-                        u.username || u.Username || u.Name || "Unknown";
-                    flatList.push({ rank, id: uid, user: uname });
-                });
-            } else if (typeof users === "object") {
-                for (const [id, username] of Object.entries(users)) {
-                    flatList.push({ rank, id: parseInt(id), user: username });
+            for (const chunk of chunks) {
+                const url = `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${chunk.join(',')}&size=420x420&format=Png&isCircular=false`;
+                const resp = await axios.get(url);
+                if (resp.data && resp.data.data) {
+                    resp.data.data.forEach(item => {
+                        if (item.state === 'Completed' && item.imageUrl) imageCache[item.targetId] = item.imageUrl;
+                    });
                 }
             }
-        }
 
-        const enrichedList = await enrichWithRobloxData(flatList, "id");
-        let structure = {};
-        const order = [
-            "Owner",
-            "Co-Owner",
-            "Co Owner",
-            "Head Developer",
-            "Developer",
-            "Super Admin",
-            "Admin",
-            "Moderator",
-            "Trial Moderator",
-            "Tester",
-        ];
-        const sortedKeys = Object.keys(rawStructure).sort((a, b) => {
-            let ia = order.findIndex(
-                (o) => a.toLowerCase() === o.toLowerCase(),
-            );
-            let ib = order.findIndex(
-                (o) => b.toLowerCase() === o.toLowerCase(),
-            );
-            if (ia === -1) ia = 999;
-            if (ib === -1) ib = 999;
-            return ia - ib;
-        });
-        sortedKeys.forEach((rank) => {
-            structure[rank] = enrichedList.filter((u) => u.rank === rank);
-        });
-        res.json(structure);
-    } catch (e) {
-        res.json({});
+            const updatedBans = currentBans.map(b => ({ ...b, Avatar: imageCache[b.UserId] || b.Avatar }));
+            saveBansToFile(updatedBans);
+
+        } catch (e) { console.error("Avatar fetch warning:", e.message); }
     }
+
+    const result = {};
+    userIds.forEach(id => result[id] = imageCache[id] || DEFAULT_GREY_IMG);
+    res.json(result);
+});
+
+// --- AUTHENTICATION ---
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body;
+    const account = authenticate(username, password);
+    if (account) {
+        res.json({ success: true, role: account.role, user: account.user, users: (account.role === 'owner' || account.role === 'developer') ? getUsers() : null });
+    } else {
+        res.status(401).json({ success: false });
+    }
+});
+
+app.post('/api/register', (req, res) => {
+    const { username, password, code } = req.body;
+    const users = getUsers();
+    const role = SIGNUP_CODES[code];
+    if (!role) return res.status(403).json({ success: false, message: "Invalid Code" });
+    if (users.find(u => u.user === username)) return res.status(400).json({ success: false, message: "User exists" });
+    users.push({ user: username, pass: password, role });
+    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+    res.json({ success: true, role });
+});
+
+app.post('/api/admin/users/update', (req, res) => {
+    const { username, password, targetUser, newRole } = req.body;
+    const account = authenticate(username, password);
+    if (!account || !['owner', 'developer'].includes(account.role)) return res.status(403).json({ success: false });
+    const users = getUsers();
+    const idx = users.findIndex(u => u.user === targetUser);
+    if (idx > -1) { 
+        users[idx].role = newRole; 
+        fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2)); 
+    }
+    res.json({ success: true });
+});
+
+app.post('/api/admin/users/delete', (req, res) => {
+    const { username, password, targetUser } = req.body;
+    const account = authenticate(username, password);
+    if (!account || !['owner', 'developer'].includes(account.role)) return res.status(403).json({ success: false });
+    let users = getUsers();
+    users = users.filter(u => u.user !== targetUser);
+    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+    res.json({ success: true });
 });
 
 // ==========================================
-// 🚀 FIXED: SERVER-SIDE PAGINATION ROUTE
+// 6. PAGE ROUTES
 // ==========================================
-app.get("/api/bans", async (req, res) => {
-    try {
-        // 1. Get query params
-        const page = parseInt(req.query.page) || 1;
-        const limit = 20;
-        const search = (req.query.search || "").toLowerCase();
-
-        console.log(
-            `[API] Bans Requested | Page: ${page} | Search: "${search}"`,
-        );
-
-        let banList = [];
-        // 2. Fetch from ERLC API
-        if (DB.config.erlcKey) {
-            try {
-                const r = await axios.get(`${DB.config.erlcUrl}/server/bans`, {
-                    headers: { "Server-Key": DB.config.erlcKey },
-                    timeout: 4000,
-                });
-                const raw = r.data;
-                const normalizer = (b, key) => ({
-                    player: b.Player || b.username || b.user || "Unknown",
-                    playerId: parseInt(
-                        b.UserId || b.userId || b.PlayerId || key || 0,
-                    ),
-                    banId: b.BanId || b.banId || "N/A",
-                    createdAt: b.Timestamp || b.createdAt || 0,
-                    expires: b.Expires || b.expires || null,
-                    active: true,
-                });
-
-                if (Array.isArray(raw)) {
-                    banList = raw.map((b) => normalizer(b, 0));
-                } else if (typeof raw === "object") {
-                    for (const [id, val] of Object.entries(raw)) {
-                        banList.push(normalizer(val, id));
-                    }
-                }
-            } catch (e) {
-                console.log(
-                    "[API] ERLC Ban API Failed, attempting fallback...",
-                );
-            }
-        }
-
-        // 3. Fallback to Eryn API if ERLC failed or empty
-        if (banList.length === 0) {
-            try {
-                const r = await axios.get(`https://api.eryn.io/v1/bans`, {
-                    timeout: 4000,
-                });
-                if (Array.isArray(r.data)) {
-                    banList = r.data.map((b) => ({
-                        player: b.user || "Unknown",
-                        playerId: parseInt(b.userId || 0),
-                        banId: b.banId || "N/A",
-                        createdAt: b.createdAt
-                            ? Math.floor(new Date(b.createdAt).getTime() / 1000)
-                            : 0,
-                        expires: b.expires || null,
-                        active: b.active ?? true,
-                    }));
-                }
-            } catch (e) {
-                console.log("[API] Eryn API also failed.");
-            }
-        }
-
-        // 4. Sort (Newest first)
-        banList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-
-        // 5. Search Filter (Server-side)
-        if (search) {
-            banList = banList.filter(
-                (b) =>
-                    b.player.toLowerCase().includes(search) ||
-                    b.playerId.toString().includes(search),
-            );
-        }
-
-        // 6. Pagination Slice
-        const total = banList.length;
-        const start = (page - 1) * limit;
-        const sliced = banList.slice(start, start + limit);
-
-        // 7. Enrich ONLY the 20 items for this page (Performance Boost)
-        const enriched = await enrichWithRobloxData(sliced, "playerId");
-
-        console.log(
-            `[API] Returning ${enriched.length} bans (Total: ${total})`,
-        );
-
-        // 8. Return data
-        res.json({ bans: enriched, total: total });
-    } catch (e) {
-        console.error(e);
-        res.json({ bans: [], total: 0 });
-    }
+app.get('/', (req, res) => {
+    const htmlPath = path.join(PUBLIC_DIR, 'index.html');
+    if (fs.existsSync(htmlPath)) res.sendFile(htmlPath);
+    else res.send("✅ System Online! (Upload index.html to /public to see site)");
 });
 
-app.get("/api/gallery/requests", (req, res) =>
-    res.json(DB.galleryRequests || []),
-);
-app.post("/api/gallery/request", (req, res) => {
-    if (req.body.url) {
-        if (!DB.galleryRequests) DB.galleryRequests = [];
-        DB.galleryRequests.push(req.body.url);
-        saveDB(DB);
-        res.json({ ok: true });
-    }
+app.get('/admin', (req, res) => {
+    const adminPath = path.join(PUBLIC_DIR, 'admin.html');
+    if (fs.existsSync(adminPath)) res.sendFile(adminPath);
+    else res.status(404).send("admin.html not found");
 });
-app.post("/api/gallery/manage", (req, res) => {
-    const { url, approve } = req.body;
-    if (!DB.galleryRequests) DB.galleryRequests = [];
-    DB.galleryRequests = DB.galleryRequests.filter((u) => u !== url);
-    if (approve) {
-        if (!DB.gallery) DB.gallery = [];
-        DB.gallery.push(url);
-    }
-    saveDB(DB);
-    res.json({ ok: true });
-});
-app.get("/api/config", (req, res) =>
-    res.json({ ...DB.config, gallery: DB.gallery }),
-);
 
-app.post("/api/config", (req, res) => {
-    const d = req.body;
-    if (Array.isArray(d.gallery)) {
-        DB.gallery = d.gallery;
-        delete d.gallery;
-    }
-    if (d.erlcKey === "") delete d.erlcKey;
-    DB.config = { ...DB.config, ...d };
-    saveDB(DB);
-    res.json({ ok: true });
+app.get('/login', (req, res) => {
+    const loginPath = path.join(PUBLIC_DIR, 'login.html');
+    if (fs.existsSync(loginPath)) res.sendFile(loginPath);
+    else res.status(404).send("login.html not found");
 });
-app.get("/", (req, res) => res.send(frontendHTML));
 
-app.listen(3000, "0.0.0.0", () =>
-    console.log("[BOOT] System Online on Port 3000"),
-);
+// ==========================================
+// 7. START SERVER
+// ==========================================
+app.listen(PORT, () => {
+    console.log(`\n✅ Server Online on Port ${PORT}`);
+    console.log(`👉 Main Site:  http://localhost:${PORT}`);
+    console.log(`👉 Mailbox:    http://localhost:${PORT}/pickup`);
+});
