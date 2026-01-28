@@ -11,7 +11,7 @@ const cors = require('cors');
 const PORT = process.env.PORT || 3000;
 
 // Configuration Keys
-const ERLC_API_KEY = process.env.ERLC_KEY; 
+const ERLC_API_KEY = process.env.ERLC_API_URL || "BlrhNoFLlGmNwEwdHMRP-ljbJmmrCkBUXvotcZZxBfxMqjTxqHSOUSLLChsHg";
 const ERLC_API_BASE = "https://api.policeroleplay.community/v1/server";
 
 // Role Codes
