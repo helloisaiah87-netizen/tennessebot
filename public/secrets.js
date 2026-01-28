@@ -1,3 +1,3 @@
 const secrets = {
-    API_KEY: "VyWezuDQMDvdfsSUkvxR-ljbJmmrCkBUXvotcZZxBfxMqjTxqHSOUSLLChsHg"
+    API_KEY: "BlrhNoFLlGmNwEwdHMRP-ljbJmmrCkBUXvotcZZxBfxMqjTxqHSOUSLLChsHg"
 };
