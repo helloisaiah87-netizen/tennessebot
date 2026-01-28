@@ -483,26 +483,37 @@ function startSmoothTicker() {
     if(uptimeTicker) clearInterval(uptimeTicker);
     uptimeTicker = setInterval(() => {
         const el = document.getElementById('stat-uptime');
-        if(el && serverBootTime) {
+        const status = document.getElementById('stat-status')?.textContent;
+
+        if(el && serverBootTime && status !== "Offline") {
             const now = new Date();
+            // Calculate the difference between now and the established boot time
             const diffSeconds = Math.floor((now - serverBootTime) / 1000);
             el.textContent = formatTime(Math.max(0, diffSeconds));
+        } else if (el && status === "Offline") {
+            el.textContent = "00:00:00";
         }
     }, 1000);
 }
 
 async function loadStats() {
     if(document.getElementById('view-dashboard')?.classList.contains('hidden')) return;
+    
     const data = await fetchAuth(API.STATS);
     if (!data) return;
 
     const safeText = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
 
+    // 1. Get the uptime string (e.g., "00:05:20") and convert to total seconds
     const serverUptimeStr = data.system?.uptime || "00:00:00";
-    const serverSeconds = parseTime(serverUptimeStr);
+    const serverSecondsFromAPI = parseTime(serverUptimeStr);
 
-    if (!serverBootTime || Math.abs((Date.now() - serverBootTime) / 1000 - serverSeconds) > 10) {
-        serverBootTime = new Date(Date.now() - (serverSeconds * 1000));
+    // 2. Calculate what the Boot Time SHOULD be based on current API data
+    const calculatedBootTime = new Date(Date.now() - (serverSecondsFromAPI * 1000));
+
+    if (!serverBootTime || (serverSecondsFromAPI < (Math.floor((Date.now() - serverBootTime) / 1000) - 10))) {
+        console.log("Server restart or initial load detected. Resetting uptime ticker.");
+        serverBootTime = calculatedBootTime;
     }
 
     safeText('stat-memory', data.system?.memory || "0 MB");
