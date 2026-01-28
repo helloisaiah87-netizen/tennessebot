@@ -1,12 +1,3 @@
-// =========================================
-// admin.js - FULL OPTIMIZED SCRIPT
-// =========================================
-
-// =========================================
-// 0. MODERN NOTIFICATION SYSTEM (AUTO-INJECTED)
-// =========================================
-
-// 1. Inject CSS Styles automatically
 const toastStyles = `
     #toast-container {
         position: fixed;
@@ -51,7 +42,6 @@ const styleSheet = document.createElement("style");
 styleSheet.innerText = toastStyles;
 document.head.appendChild(styleSheet);
 
-// 2. Create Container
 let toastContainer = document.getElementById('toast-container');
 if (!toastContainer) {
     toastContainer = document.createElement('div');
@@ -59,7 +49,6 @@ if (!toastContainer) {
     document.body.appendChild(toastContainer);
 }
 
-// 3. Notification Function
 window.notify = function(message, type = 'success') {
     const toast = document.createElement('div');
     toast.className = `custom-toast ${type}`;
@@ -77,9 +66,6 @@ window.notify = function(message, type = 'success') {
     }, 3500);
 };
 
-// =========================================
-// 1. CONFIGURATION & STATE
-// =========================================
 const API = { 
     STATS: '/api/admin/stats', 
     CONTENT: '/api/content', 
@@ -91,11 +77,9 @@ const API = {
 
 const PERMITTED_ROLES = ['owner', 'developer', 'dev', 'manager', 'co-owner', 'superadmin'];
 
-// State Variables
 let currentUserRole = '';
 let banState = { all: [], filtered: [], page: 1, perPage: 10 };
 
-// Uptime Variables
 let serverBootTime = null; 
 let uptimeTicker = null;
 let lastPlayersHash = "";
@@ -112,51 +96,31 @@ let siteConfig = {
         'donate': { color: '#bf5af2' }
     } 
 };
-
-// =========================================
-// 2. BOT RELAY & ACTIONS
-// =========================================
-
 window.savedMailboxUrl = "";
 window.savedAccessKey = "";
 
-// =========================================
-// ADD THIS TO SECTION 7 (BANS LOGIC)
-// =========================================
-
 window.filterBanSearch = function(query) {
-    // 1. Clean the input (lowercase, remove extra spaces)
     const lowerQuery = query.toLowerCase().trim();
-
-    // 2. If box is empty, show everything
     if (!lowerQuery) {
         banState.filtered = banState.all;
     } 
-    // 3. Otherwise, filter the list
     else {
         banState.filtered = banState.all.filter(ban => {
-            // Safely get values, defaulting to empty string if null
             const uName = (ban.User || '').toLowerCase();
             const uId = (ban.UserId || '').toString();
             const uReason = (ban.Reason || '').toLowerCase();
             const uMod = (ban.Moderator || '').toLowerCase();
 
-            // Check if any field contains the search text
             return uName.includes(lowerQuery) || 
                    uId.includes(lowerQuery) || 
                    uReason.includes(lowerQuery) || 
                    uMod.includes(lowerQuery);
         });
     }
-
-    // 4. Reset to page 1 so user doesn't get lost
     banState.page = 1;
-
-    // 5. Redraw the table with new results
     renderBanTable();
 };
 
-// --- LOAD SAVED DATA ---
 document.addEventListener('DOMContentLoaded', () => {
     console.log("Admin Dashboard Loaded.");
 
@@ -256,7 +220,6 @@ window.sendCommand = async function(type, command, targetId = null) {
     }
 };
 
-// --- MODERATION LOGIC ---
 window.sendModeration = async function(action) {
     const targetId = document.getElementById('mod-target-id').value.trim();
     if (!targetId) return window.notify("Please enter a User ID first.", "warning");
@@ -283,7 +246,6 @@ window.sendModeration = async function(action) {
     }
 };
 
-// --- STATUS CHANGER ---
 window.updateBotStatus = async function() {
     const type = document.getElementById('status-type').value;
     const text = document.getElementById('status-text').value;
@@ -310,9 +272,6 @@ window.updateBotStatus = async function() {
     }
 };
 
-// =========================================
-// [NEW] SESSION MANAGER COMMANDS
-// =========================================
 window.triggerCommand = async function(commandType) {
     if (!window.savedMailboxUrl) return window.notify("Bot not connected!", "error");
 
@@ -320,23 +279,20 @@ window.triggerCommand = async function(commandType) {
     const reasonInput = document.getElementById('cmd-reason');
     const message = reasonInput ? reasonInput.value.trim() : "";
 
-    // 1. Visual Feedback
     if(feedback) {
         feedback.innerText = `Sending :${commandType}...`;
         feedback.style.color = "#ffff00";
     }
 
-    // 2. Construct Payload
     const payload = {
         key: window.savedAccessKey,
-        type: 'session',            // Identifies this as a session command
-        command: commandType,       // e.g. 'ssu', 'ssd'
-        args: { message: message }, // The optional reason/text
+        type: 'session',            
+        command: commandType,       
+        args: { message: message }, 
         admin: sessionStorage.getItem('tsrp_user') || 'WebConsole',
         timestamp: Date.now()
     };
 
-    // 3. Send to Bot
     try {
         await fetch(window.savedMailboxUrl, {
             method: 'POST',
@@ -344,10 +300,9 @@ window.triggerCommand = async function(commandType) {
             body: JSON.stringify(payload)
         });
 
-        // Success State
         window.notify(`Session Command :${commandType} Sent!`, "success");
 
-        if (reasonInput) reasonInput.value = ''; // Clear input
+        if (reasonInput) reasonInput.value = ''; 
         if (feedback) {
             feedback.innerText = `Sent :${commandType}`;
             feedback.style.color = "#30d158";
@@ -361,15 +316,8 @@ window.triggerCommand = async function(commandType) {
             feedback.style.color = "#ff3b30";
         }
     }
-
-    // Reset feedback text after 3 seconds
     setTimeout(() => { if(feedback) feedback.innerText = ""; }, 3000);
 };
-
-
-// =========================================
-// 3. PAGE LOADING & DATA LOOPS
-// =========================================
 
 document.addEventListener('DOMContentLoaded', () => {
     const user = sessionStorage.getItem('tsrp_user');
@@ -378,7 +326,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!user) return window.location.href = 'login.html';
 
-    // Update Profile Display
     const userDisplay = document.getElementById('user-display');
     const roleDisplay = document.getElementById('user-role-display');
     const avatarDisplay = document.getElementById('user-avatar');
@@ -387,7 +334,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if(roleDisplay) roleDisplay.textContent = rawRole; 
     if(avatarDisplay) avatarDisplay.textContent = user.charAt(0).toUpperCase();
 
-    // Unlock Tabs based on Role
     if (PERMITTED_ROLES.includes(currentUserRole)) {
         const serverTab = document.getElementById('nav-item-server');
         const editorTab = document.getElementById('nav-item-editor');
@@ -395,7 +341,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if(editorTab) editorTab.style.display = 'block';
     }
 
-    // Start Data Loops
     loadStats(); 
     setInterval(loadStats, 5000); 
     startSmoothTicker();
@@ -424,10 +369,6 @@ async function fetchAuth(url, method = 'GET', body = null) {
         return await res.json();
     } catch (err) { console.error(err); return null; }
 }
-
-// =========================================
-// 4. NAVIGATION & ROUTING
-// =========================================
 
 function handleRouting() {
     const hash = window.location.hash.substring(1); 
@@ -492,9 +433,6 @@ function switchEditTab(tabName, btn, updateHistory = true) {
     }
 }
 
-// =========================================
-// 5. HELPER FUNCTIONS
-// =========================================
 function escapeHtml(text) {
     if (text == null) return '';
     return String(text)
@@ -525,9 +463,6 @@ function getAvatarHTML(name, url) {
     return fallbackHTML;
 }
 
-// =========================================
-// 6. DASHBOARD & UPTIME (FIXED)
-// =========================================
 function parseTime(timeStr) {
     if(!timeStr) return 0;
     const parts = timeStr.split(':').map(Number);
@@ -605,9 +540,6 @@ function renderPlayers(players) {
     tbody.innerHTML = html;
 }
 
-// =========================================
-// 7. BANS LOGIC
-// =========================================
 async function loadBans() {
     const tbody = document.querySelector('#bans-table tbody');
     if(!tbody) return;
@@ -679,9 +611,6 @@ function renderBanTable() {
     if(pageInfo) pageInfo.textContent = `Page ${banState.page} of ${totalPages}`;
 }
 
-// =========================================
-// 8. SITE EDITOR LOGIC
-// =========================================
 function addGalleryRow(url = '', credit = '') {
     const container = document.getElementById('gallery-rows-container');
     if(!container) return;
