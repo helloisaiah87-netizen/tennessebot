@@ -401,7 +401,7 @@ app.get('/login', (req, res) => {
 // 7. START SERVER
 // ==========================================
 app.listen(PORT, () => {
-    console.log(`\n✅ Server Online on Port ${PORT}`);
+    console.log(`\nServer Online on Port ${PORT}`);
     console.log(`👉 Main Site:  http://localhost:${PORT}`);
     console.log(`👉 Mailbox:    http://localhost:${PORT}/pickup`);
 });
