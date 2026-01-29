@@ -80,6 +80,7 @@ const PERMITTED_ROLES = ['owner', 'developer', 'dev', 'manager', 'co-owner', 'su
 let currentUserRole = '';
 let banState = { all: [], filtered: [], page: 1, perPage: 10 };
 
+// Uptime variables
 let serverBootTime = null; 
 let uptimeTicker = null;
 let lastPlayersHash = "";
@@ -487,7 +488,7 @@ function startSmoothTicker() {
 
         if(el && serverBootTime && status !== "Offline") {
             const now = new Date();
-            // Calculate the difference between now and the established boot time
+            // Continuously update based on local time difference from the anchored boot time
             const diffSeconds = Math.floor((now - serverBootTime) / 1000);
             el.textContent = formatTime(Math.max(0, diffSeconds));
         } else if (el && status === "Offline") {
@@ -508,12 +509,21 @@ async function loadStats() {
     const serverUptimeStr = data.system?.uptime || "00:00:00";
     const serverSecondsFromAPI = parseTime(serverUptimeStr);
 
-    // 2. Calculate what the Boot Time SHOULD be based on current API data
-    const calculatedBootTime = new Date(Date.now() - (serverSecondsFromAPI * 1000));
-
-    if (!serverBootTime || (serverSecondsFromAPI < (Math.floor((Date.now() - serverBootTime) / 1000) - 10))) {
-        console.log("Server restart or initial load detected. Resetting uptime ticker.");
-        serverBootTime = calculatedBootTime;
+    // 2. Logic to prevent ticker resetting on every fetch
+    if (!serverBootTime) {
+        // Initial set anchor
+        serverBootTime = new Date(Date.now() - (serverSecondsFromAPI * 1000));
+    } else {
+        // Check if server *actually* restarted.
+        // We only reset if the API reports an uptime that is significantly lower (e.g., >30s difference)
+        // than what we expect based on our local timer.
+        // This ignores small lags or API caching issues.
+        const expectedSeconds = (Date.now() - serverBootTime.getTime()) / 1000;
+        
+        if (serverSecondsFromAPI < (expectedSeconds - 30)) {
+            console.log("Server restart detected. Resetting ticker.");
+            serverBootTime = new Date(Date.now() - (serverSecondsFromAPI * 1000));
+        }
     }
 
     safeText('stat-memory', data.system?.memory || "0 MB");
