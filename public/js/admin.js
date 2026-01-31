@@ -98,15 +98,36 @@ let siteConfig = {
         'donate': { color: '#bf5af2' }
     } 
 };
-window.savedMailboxUrl = "";
+// ==========================================
+//        GLOBAL CONFIG & VARIABLES
+// ==========================================
+const DASHBOARD_URL = "https://tennessebot.onrender.com/pickup";
+window.savedMailboxUrl = DASHBOARD_URL; // Sync these so older logic works too
 window.savedAccessKey = "";
 
+// ==========================================
+//           HELPER FUNCTIONS
+// ==========================================
+
+// Format milliseconds into 00:00:00
+function formatDuration(ms) {
+    const seconds = Math.floor((ms / 1000) % 60);
+    const minutes = Math.floor((ms / (1000 * 60)) % 60);
+    const hours = Math.floor((ms / (1000 * 60 * 60)));
+
+    return [hours, minutes, seconds]
+        .map(v => v.toString().padStart(2, '0'))
+        .join(':');
+}
+
+// ==========================================
+//           BAN FILTER LOGIC
+// ==========================================
 window.filterBanSearch = function(query) {
     const lowerQuery = query.toLowerCase().trim();
     if (!lowerQuery) {
         banState.filtered = banState.all;
-    } 
-    else {
+    } else {
         banState.filtered = banState.all.filter(ban => {
             const uName = (ban.User || '').toLowerCase();
             const uId = (ban.UserId || '').toString();
@@ -123,59 +144,45 @@ window.filterBanSearch = function(query) {
     renderBanTable();
 };
 
+// ==========================================
+//           INITIALIZATION
+// ==========================================
 document.addEventListener('DOMContentLoaded', () => {
     console.log("Admin Dashboard Loaded.");
 
+    // Load stored credentials if they exist (optional, mostly for the key now)
     const storedUrl = localStorage.getItem('mailbox_url');
     const storedKey = localStorage.getItem('bot_key');
 
-    if (storedUrl && storedKey) {
-        window.savedMailboxUrl = storedUrl;
+    if (storedKey) {
         window.savedAccessKey = storedKey;
-
-        const urlInput = document.getElementById('bot-host-url');
         const keyInput = document.getElementById('bot-access-key');
-        if (urlInput) urlInput.value = storedUrl;
         if (keyInput) keyInput.value = storedKey;
+    }
 
-        if (typeof window.showConnectedUI === 'function') {
-            window.showConnectedUI();
-        }
+    // Force the hardcoded URL into the input box for clarity
+    const urlInput = document.getElementById('bot-host-url');
+    if (urlInput) urlInput.value = DASHBOARD_URL;
+    
+    if (typeof window.showConnectedUI === 'function') {
+        window.showConnectedUI();
     }
 });
 
-// Function to format milliseconds into 00:00:00
-function formatDuration(ms) {
-    const seconds = Math.floor((ms / 1000) % 60);
-    const minutes = Math.floor((ms / (1000 * 60)) % 60);
-    const hours = Math.floor((ms / (1000 * 60 * 60)));
-
-    return [hours, minutes, seconds]
-        .map(v => v.toString().padStart(2, '0'))
-        .join(':');
-}
-
-const DASHBOARD_URL = "https://tennessebot.onrender.com/pickup";
-
-function formatDuration(ms) {
-    const seconds = Math.floor((ms / 1000) % 60);
-    const minutes = Math.floor((ms / (1000 * 60)) % 60);
-    const hours = Math.floor((ms / (1000 * 60 * 60)));
-
-    return [hours, minutes, seconds]
-        .map(v => v.toString().padStart(2, '0'))
-        .join(':');
-}
-
+// ==========================================
+//      REAL-TIME STATUS UPDATE LOOP
+// ==========================================
 window.updateDashboardStats = async function() {
     const latencyVal = document.getElementById('stat-latency');
     const latencySub = latencyVal?.parentElement.querySelector('.stat-sub');
     const uptimeVal = document.getElementById('bot-uptime');
 
     try {
+        // Fetch data (with timestamp to prevent caching)
         const response = await fetch(DASHBOARD_URL + "?t=" + Date.now());
         const data = await response.json();
 
+        // 1. Update Latency / Ping
         if (data.status && typeof data.status.ping !== 'undefined') {
             const ping = data.status.ping;
             if (latencyVal) latencyVal.innerText = ping + " ms";
@@ -183,19 +190,20 @@ window.updateDashboardStats = async function() {
             if (latencySub) {
                 if (ping < 100) {
                     latencySub.innerText = "Excellent";
-                    latencySub.style.color = "#32d74b";
+                    latencySub.style.color = "#32d74b"; // Green
                 } else if (ping < 250) {
                     latencySub.innerText = "Stable";
-                    latencySub.style.color = "#ff9f0a";
+                    latencySub.style.color = "#ff9f0a"; // Orange
                 } else {
                     latencySub.innerText = "High Latency";
-                    latencySub.style.color = "#ff453a";
+                    latencySub.style.color = "#ff453a"; // Red
                 }
             }
         } else {
             if (latencyVal) latencyVal.innerText = "-- ms";
         }
 
+        // 2. Update Uptime
         if (data.status && data.status.startedAt) {
             const diff = Date.now() - data.status.startedAt;
             if (uptimeVal) {
@@ -204,52 +212,26 @@ window.updateDashboardStats = async function() {
             }
         } else {
             if (uptimeVal) uptimeVal.innerText = "Offline";
+            if (uptimeVal) uptimeVal.style.color = "#ff453a";
         }
 
     } catch (err) {
+        // Handle Errors (Offline)
         if (latencyVal) latencyVal.innerText = "ERR";
         if (latencySub) {
             latencySub.innerText = "Offline";
             latencySub.style.color = "#ff453a";
         }
+        if (uptimeVal) {
+            uptimeVal.innerText = "Offline";
+            uptimeVal.style.color = "#ff453a";
+        }
     }
 };
 
+// Start the loop immediately
 window.updateDashboardStats();
 setInterval(window.updateDashboardStats, 1000);
-
-async function updateRealUptime() {
-    const el = document.getElementById('bot-uptime');
-    if (!el || !window.savedMailboxUrl) return;
-
-    try {
-        // 1. Fetch the data from the mailbox
-        // We use a timestamp query (?t=...) to prevent browser caching
-        const response = await fetch(window.savedMailboxUrl + "?t=" + Date.now());
-        const data = await response.json();
-
-        // 2. Check if the bot has written its status
-        if (data.status && data.status.startedAt) {
-            
-            // Calculate difference: Now - Bot Start Time
-            const uptimeMs = Date.now() - data.status.startedAt;
-            
-            // Update the text
-            el.innerText = formatDuration(uptimeMs);
-            el.style.color = "#fff"; // Normal color
-
-        } else {
-            // Bot hasn't reported in yet
-            el.innerText = "Offline";
-            el.style.color = "#ff453a"; 
-        }
-    } catch (error) {
-        el.innerText = "--:--:--";
-    }
-}
-
-// Update the uptime display every 1 second
-setInterval(updateRealUptime, 1000);
 
 window.showConnectedUI = function() {
     document.getElementById('bot-login-gate').classList.add('hidden');
