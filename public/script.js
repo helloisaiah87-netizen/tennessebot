@@ -27,15 +27,21 @@ async function loadContent() {
             if (titleEl) titleEl.innerHTML = data.hero.title || "Tennessee State Roleplay";
             if (subEl) subEl.innerText = data.hero.subtitle || "Experience the highest quality roleplay.";
 
-            const statusTextEl = document.getElementById('server-status-text'); 
-            const statusIcon = document.querySelector('.status-pill i');        
+            const statusTextEl = document.getElementById('server-status-text');
+            const statusPill = document.getElementsByClassName('status-pill')[0];
+            const pulsingDot = document.getElementsByClassName('pulsing-dot')[0];
+
+            if (data?.hero?.statusColor && statusPill) {
+             statusPill.style.color = data.hero.statusColor;
+
+                if (data?.hero?.statusColor && pulsingDot) {
+                    pulsingDot.style.background = data.hero.statusColor;
+                }
+            }
+
+            
 
             if (data.hero.statusText && statusTextEl) statusTextEl.innerText = data.hero.statusText;
-
-            if (data.hero.statusColor && statusIcon) {
-                statusIcon.style.color = data.hero.statusColor;
-                statusIcon.style.textShadow = `0 0 10px ${data.hero.statusColor}`;
-            }
 
             const bgDiv = document.getElementById('dynamic-hero-bg');
             const images = data.hero.images || (data.hero.bgImage ? [data.hero.bgImage] : []);
