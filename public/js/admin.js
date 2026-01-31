@@ -38,6 +38,7 @@ const toastStyles = `
         to { transform: translateX(10px); opacity: 0; }
     }
 `;
+
 const styleSheet = document.createElement("style");
 styleSheet.innerText = toastStyles;
 document.head.appendChild(styleSheet);
@@ -65,6 +66,88 @@ window.notify = function(message, type = 'success') {
         setTimeout(() => toast.remove(), 400);
     }, 3500);
 };
+
+// ==========================================
+//        DASHBOARD STATUS & METRICS
+// ==========================================
+
+// --- CONFIGURATION ---
+// We hardcode the URL here to ensure the connection never fails
+const DASHBOARD_URL = "https://tennessebot.onrender.com/pickup";
+
+// Helper to format milliseconds into 00:00:00
+function formatDuration(ms) {
+    const seconds = Math.floor((ms / 1000) % 60);
+    const minutes = Math.floor((ms / (1000 * 60)) % 60);
+    const hours = Math.floor((ms / (1000 * 60 * 60)));
+
+    return [hours, minutes, seconds]
+        .map(v => v.toString().padStart(2, '0'))
+        .join(':');
+}
+
+window.updateDashboardStats = async function() {
+    // 1. Get Elements
+    const latencyVal = document.getElementById('stat-latency');
+    const latencySub = latencyVal?.parentElement.querySelector('.stat-sub');
+    const uptimeVal = document.getElementById('bot-uptime');
+
+    try {
+        // 2. Fetch Data (Timestamp '?t=' prevents caching)
+        const response = await fetch(DASHBOARD_URL + "?t=" + Date.now());
+        const data = await response.json();
+
+        // --- DEBUG LOGGING ---
+        // (This prints the data to your browser console F12 so you can see it)
+        console.log("[DASHBOARD] Received:", data.status);
+
+        // --- UPDATE LATENCY ---
+        if (data.status && typeof data.status.ping !== 'undefined') {
+            const ping = data.status.ping;
+            if(latencyVal) latencyVal.innerText = ping + " ms";
+
+            // Update Color/Label based on ping speed
+            if(latencySub) {
+                if (ping < 100) {
+                    latencySub.innerText = "Excellent";
+                    latencySub.style.color = "#32d74b"; // Green
+                } else if (ping < 250) {
+                    latencySub.innerText = "Stable";
+                    latencySub.style.color = "#ff9f0a"; // Orange
+                } else {
+                    latencySub.innerText = "High Latency";
+                    latencySub.style.color = "#ff453a"; // Red
+                }
+            }
+        } else {
+            if(latencyVal) latencyVal.innerText = "-- ms";
+        }
+
+        // --- UPDATE UPTIME ---
+        if (data.status && data.status.startedAt) {
+            const diff = Date.now() - data.status.startedAt;
+            if(uptimeVal) {
+                uptimeVal.innerText = formatDuration(diff);
+                uptimeVal.style.color = "#fff"; 
+            }
+        } else {
+            if(uptimeVal) uptimeVal.innerText = "Offline";
+        }
+
+    } catch (err) {
+        console.error("Dashboard Fetch Error:", err);
+        // Handle Offline / Error State
+        if(latencyVal) latencyVal.innerText = "ERR";
+        if(latencySub) {
+            latencySub.innerText = "Offline";
+            latencySub.style.color = "#ff453a";
+        }
+    }
+};
+
+// Run immediately, then every 1 second
+window.updateDashboardStats();
+setInterval(window.updateDashboardStats, 1000);
 
 const API = { 
     STATS: '/api/admin/stats', 
@@ -142,6 +225,50 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 });
+
+// Function to format milliseconds into 00:00:00
+function formatDuration(ms) {
+    const seconds = Math.floor((ms / 1000) % 60);
+    const minutes = Math.floor((ms / (1000 * 60)) % 60);
+    const hours = Math.floor((ms / (1000 * 60 * 60)));
+
+    return [hours, minutes, seconds]
+        .map(v => v.toString().padStart(2, '0'))
+        .join(':');
+}
+
+async function updateRealUptime() {
+    const el = document.getElementById('bot-uptime');
+    if (!el || !window.savedMailboxUrl) return;
+
+    try {
+        // 1. Fetch the data from the mailbox
+        // We use a timestamp query (?t=...) to prevent browser caching
+        const response = await fetch(window.savedMailboxUrl + "?t=" + Date.now());
+        const data = await response.json();
+
+        // 2. Check if the bot has written its status
+        if (data.status && data.status.startedAt) {
+            
+            // Calculate difference: Now - Bot Start Time
+            const uptimeMs = Date.now() - data.status.startedAt;
+            
+            // Update the text
+            el.innerText = formatDuration(uptimeMs);
+            el.style.color = "#fff"; // Normal color
+
+        } else {
+            // Bot hasn't reported in yet
+            el.innerText = "Offline";
+            el.style.color = "#ff453a"; 
+        }
+    } catch (error) {
+        el.innerText = "--:--:--";
+    }
+}
+
+// Update the uptime display every 1 second
+setInterval(updateRealUptime, 1000);
 
 window.showConnectedUI = function() {
     document.getElementById('bot-login-gate').classList.add('hidden');
